@@ -14,7 +14,7 @@ public static class RuntimeProvider
     static HttpClient Create()
     {
         var h = new HttpClient();
-        h.DefaultRequestHeaders.UserAgent.ParseAdd("PS2Builder/0.1");
+        h.DefaultRequestHeaders.UserAgent.ParseAdd("PS2Builder/0.2");
         return h;
     }
 

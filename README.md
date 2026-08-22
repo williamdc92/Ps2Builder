@@ -34,16 +34,19 @@ The target PC only needs to run a Windows x64 version compatible with the bundle
 - In Automatic mode, the player selects the internal resolution multiplier according to the target PC's desktop resolution.
 - Aspect ratio selection: Automatic, 4:3, 16:9.
 - Automatic PCSX2 renderer selection.
+- Automatic controller mapping for the first two standard SDL gamepads. `PLAY.exe` preconfigures PCSX2 controller ports using the same generic SDL bindings used by PCSX2 automatic mapping, so normal controllers do not require opening the PCSX2 settings UI.
+- PS2 Builder exit overlay: Escape opens a confirmation overlay with **Continue** selected by default instead of exposing the PCSX2 pause menu. Escape/B cancels; Enter/A confirms.
+- PCSX2 double-click fullscreen switching and the normal fullscreen hotkey are disabled. Exclusive fullscreen control is also disabled so the PS2 Builder exit overlay can reliably appear above the game window.
 - Full PS2 BIOS boot using `-slowboot`.
 - Fullscreen launch using `-fullscreen`.
 - PCSX2 GUI hidden using `-nogui`.
 - Batch mode using `-batch`.
 - PCSX2 runtime automatically downloaded from the current official GitHub release and bundled inside the generated ISO.
-- On first PLAY, the bundled PCSX2 runtime is copied into `%LOCALAPPDATA%\PS2Builder\Games\<SERIAL>\Runtime\`. This is a private writable runtime for that game, not a system-wide installation.
+- On first PLAY, the bundled PCSX2 runtime is cached under `%LOCALAPPDATA%\PS2Builder\Runtimes\`. Games using the same runtime version share one physical PCSX2 copy instead of duplicating the emulator per game.
 - Official Microsoft Visual C++ x64 Redistributable bundled as an offline prerequisite. It is launched automatically only when the required runtime is missing from the target PC.
-- Writable emulator data is kept inside the per-game local PCSX2 runtime by using portable mode; the game image and BIOS remain on the read-only disc.
+- Writable emulator data is stored per game below the shared runtime in `UserData\<SERIAL>\`. PCSX2 2.6.x is redirected there through a simple child path in `portable.txt`. The game image remains on the read-only disc. The BIOS ROM is mirrored into the writable game data because PCSX2 creates and updates `.nvm`/`.mec` sidecar files next to the selected BIOS.
 - Shared memory cards stored under `Saved Games\PS2Builder\MemoryCards\`. Memory cards are created or initialized by PCSX2 when they do not already exist.
-- Per-game configuration and cache stored under `%LOCALAPPDATA%\PS2Builder\Games\<SERIAL>\`.
+- Per-game configuration/cache stored below the shared runtime in `UserData\<SERIAL>\`. Legacy per-game PCSX2 runtime copies from older test builds are migrated and removed automatically.
 - Customizable disc icon.
 - Default PS2 Builder icon automatically generated when no custom icon is selected.
 - Optional icon search through SteamGridDB using the user's own API key.
@@ -139,7 +142,7 @@ SteamGridDB is a separate service and is not affiliated with this project.
 
 ## Project Status
 
-PS2 Builder currently implements the complete architecture described above and is intended to be compiled and tested on a real Windows environment.
+PS2 Builder currently implements the complete architecture described above and is intended to be compiled and tested on a real Windows environment. The runtime model uses one shared PCSX2 copy per bundled runtime version, while writable state remains isolated per game.
 
 The components most likely to require adjustments after initial testing are:
 

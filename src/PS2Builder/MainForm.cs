@@ -23,7 +23,7 @@ public sealed class MainForm : Form
         var grid = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(18), ColumnCount = 3, RowCount = 12 };
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150)); grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90));
         AddRow(grid, 0, "Game", game, BrowseButton("Game", game, "Disc images|*.iso;*.bin;*.img|All files|*.*", async () => await DetectAsync()));
-        AddRow(grid, 1, "BIOS PS2", bios, BrowseButton("BIOS", bios, "BIOS files|*.bin;*.rom|All files|*.*"));
+        AddRow(grid, 1, "PS2 BIOS", bios, BrowseButton("BIOS", bios, "BIOS files|*.bin;*.rom|All files|*.*"));
         AddRow(grid, 2, "Disc name", title, null);
         grid.Controls.Add(new Label { Text = "Detection", AutoSize = true }, 0, 3); grid.Controls.Add(detected, 1, 3); grid.SetColumnSpan(detected, 2);
         AddRow(grid, 4, "Internal resolution", resolution, null);
