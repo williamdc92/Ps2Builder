@@ -23,25 +23,6 @@ public static class Player
 
         Directory.CreateDirectory(localRoot);
         Directory.CreateDirectory(sharedSaves);
-        Directory.CreateDirectory(Path.Combine(localRoot, "inis"));
-        Directory.CreateDirectory(Path.Combine(localRoot, "patches"));
-
-        // Selected patch files are copied from the read-only disc into PCSX2's writable data path.
-        // Files originating from optical media may carry the ReadOnly attribute. Always normalize
-        // the local copy so subsequent launches can update/replace it without elevation.
-        var discPatches = Path.Combine(data, "patches");
-        if (Directory.Exists(discPatches))
-        {
-            foreach (var f in Directory.GetFiles(discPatches, "*.pnach"))
-            {
-                var destination = Path.Combine(localRoot, "patches", Path.GetFileName(f));
-                CopyAsWritable(f, destination);
-            }
-        }
-
-        var biosDir = Path.Combine(data, "firmware");
-        var ini = Path.Combine(localRoot, "inis", "PCSX2.ini");
-        File.WriteAllText(ini, BuildIni(m, biosDir, sharedSaves));
 
         EnsureVisualCppRuntime(data);
 
@@ -52,13 +33,35 @@ public static class Player
         if (!File.Exists(game))
             throw new FileNotFoundException("The game image is missing from the disc.", game);
 
-        // PCSX2 stable v2.6.x does not support the newer -datapath CLI option.
-        // To remain compatible with stable releases while keeping the generated disc read-only,
-        // cache the bundled runtime locally and use PCSX2 portable mode. portable.txt points the
-        // runtime at this game's writable PS2 Builder directory. The game and BIOS remain on disc.
-        var localRuntime = EnsureLocalRuntime(discRuntime, m);
-        var relativeDataPath = Path.GetRelativePath(localRuntime, localRoot);
-        File.WriteAllText(Path.Combine(localRuntime, "portable.txt"), relativeDataPath, Encoding.UTF8);
+        // Keep a writable PCSX2 runtime per game. This deliberately avoids redirecting
+        // portable mode through a relative path containing '..', which PCSX2 2.6.x can
+        // pass to Win32 directory creation without canonicalizing first.
+        //
+        // An empty portable.ini next to pcsx2-qt.exe is enough to enable portable mode.
+        // With no portable.txt present, PCSX2 uses the executable directory itself as
+        // DataRoot, so inis/patches/cache are all guaranteed to be writable.
+        var localRuntime = EnsureLocalRuntime(discRuntime, m, localRoot);
+        var iniDir = Path.Combine(localRuntime, "inis");
+        var patchDir = Path.Combine(localRuntime, "patches");
+        Directory.CreateDirectory(iniDir);
+        Directory.CreateDirectory(patchDir);
+
+        // Selected patch files are copied from the read-only disc into PCSX2's writable
+        // portable data directory. Normalize attributes so subsequent launches can replace them.
+        var discPatches = Path.Combine(data, "patches");
+        if (Directory.Exists(discPatches))
+        {
+            foreach (var f in Directory.GetFiles(discPatches, "*.pnach"))
+            {
+                var destination = Path.Combine(patchDir, Path.GetFileName(f));
+                CopyAsWritable(f, destination);
+            }
+        }
+
+        var biosDir = Path.Combine(data, "firmware");
+        var ini = Path.Combine(iniDir, "PCSX2.ini");
+        File.WriteAllText(ini, BuildIni(m, biosDir, sharedSaves), new UTF8Encoding(false));
+        File.SetAttributes(ini, FileAttributes.Normal);
 
         var exe = Path.Combine(localRuntime, "pcsx2-qt.exe");
         if (!File.Exists(exe))
@@ -72,12 +75,9 @@ public static class Player
         });
     }
 
-    static string EnsureLocalRuntime(string discRuntime, DiscManifest manifest)
+    static string EnsureLocalRuntime(string discRuntime, DiscManifest manifest, string localGameRoot)
     {
-        var safeVersion = SanitizePathComponent(manifest.RuntimeVersion ?? "bundled", "bundled");
-        var runtimeRoot = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "PS2Builder", "Runtime", safeVersion);
+        var runtimeRoot = Path.Combine(localGameRoot, "Runtime");
         var marker = Path.Combine(runtimeRoot, ".ps2builder-runtime.json");
         var exe = Path.Combine(runtimeRoot, "pcsx2-qt.exe");
 
@@ -117,13 +117,25 @@ public static class Player
                     Version = manifest.RuntimeVersion ?? "bundled",
                     Source = manifest.RuntimeSource
                 },
-                new JsonSerializerOptions { WriteIndented = true }));
+                new JsonSerializerOptions { WriteIndented = true }), new UTF8Encoding(false));
+            File.SetAttributes(marker, FileAttributes.Normal);
         }
 
-        // A previous run may have left portable.txt read-only. Normalize before updating it.
-        var portable = Path.Combine(runtimeRoot, "portable.txt");
-        if (File.Exists(portable))
-            File.SetAttributes(portable, FileAttributes.Normal);
+        // portable.ini is only a marker file. An empty file makes PCSX2 use AppRoot as
+        // its data root. Remove portable.txt because older PS2 Builder test builds may
+        // have left a relative redirected path there, and portable.txt takes effect too.
+        var portableTxt = Path.Combine(runtimeRoot, "portable.txt");
+        if (File.Exists(portableTxt))
+        {
+            File.SetAttributes(portableTxt, FileAttributes.Normal);
+            File.Delete(portableTxt);
+        }
+
+        var portableIni = Path.Combine(runtimeRoot, "portable.ini");
+        if (File.Exists(portableIni))
+            File.SetAttributes(portableIni, FileAttributes.Normal);
+        File.WriteAllText(portableIni, string.Empty, new UTF8Encoding(false));
+        File.SetAttributes(portableIni, FileAttributes.Normal);
 
         return runtimeRoot;
     }

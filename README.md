@@ -39,9 +39,9 @@ The target PC only needs to run a Windows x64 version compatible with the bundle
 - PCSX2 GUI hidden using `-nogui`.
 - Batch mode using `-batch`.
 - PCSX2 runtime automatically downloaded from the current official GitHub release and bundled inside the generated ISO.
-- On first PLAY, the bundled PCSX2 runtime is copied into a versioned local runtime cache under `%LOCALAPPDATA%\PS2Builder\Runtime\`. This is an internal cache, not a system-wide installation, and it is reused by discs containing the same runtime version.
+- On first PLAY, the bundled PCSX2 runtime is copied into `%LOCALAPPDATA%\PS2Builder\Games\<SERIAL>\Runtime\`. This is a private writable runtime for that game, not a system-wide installation.
 - Official Microsoft Visual C++ x64 Redistributable bundled as an offline prerequisite. It is launched automatically only when the required runtime is missing from the target PC.
-- Writable emulator data is separated from the read-only disc through a local portable-mode data directory.
+- Writable emulator data is kept inside the per-game local PCSX2 runtime by using portable mode; the game image and BIOS remain on the read-only disc.
 - Shared memory cards stored under `Saved Games\PS2Builder\MemoryCards\`. Memory cards are created or initialized by PCSX2 when they do not already exist.
 - Per-game configuration and cache stored under `%LOCALAPPDATA%\PS2Builder\Games\<SERIAL>\`.
 - Customizable disc icon.

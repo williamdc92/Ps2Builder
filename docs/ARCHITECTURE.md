@@ -21,34 +21,32 @@ The same binary runs in **Player Mode** when it finds `.ps2builder/manifest.json
 
 1. Reads the disc manifest.
 2. Creates the required local directories and shared memory card directory if they do not already exist.
-3. Copies the bundled PCSX2 runtime from the read-only disc into a versioned local runtime cache if that runtime is not already cached.
-4. Copies the selected patches into the writable per-game data directory.
-5. Generates `PCSX2.ini` inside the per-game writable data directory.
-6. Points PCSX2 portable mode at the per-game data directory through `portable.txt`.
-7. Launches the cached runtime using `-portable -nogui -batch -fullscreen -slowboot`.
-8. PCSX2 reads the game and BIOS directly from the read-only disc while writing configuration, cache and memory cards to the local PC.
+3. Copies the bundled PCSX2 runtime from the read-only disc into the game-specific writable runtime directory if the required runtime is not already cached there.
+4. Enables PCSX2 portable mode inside that writable runtime directory.
+5. Copies the selected patches into the runtime's writable `patches` directory.
+6. Generates `PCSX2.ini` inside the runtime's writable `inis` directory.
+7. Launches the local runtime using `-portable -nogui -batch -fullscreen -slowboot`.
+8. PCSX2 reads the game and BIOS directly from the read-only disc while writing configuration and cache into the game-specific local runtime. Memory cards remain in the shared save directory.
 
-The local runtime cache is necessary for compatibility with stable PCSX2 releases such as v2.6.x, which support portable mode but do not provide the newer `-datapath` command-line option.
+This per-game writable runtime avoids relying on the newer `-datapath` option and avoids redirecting PCSX2 2.6.x through relative `..` paths. An empty `portable.ini` marker (together with `-portable`) makes PCSX2 use the runtime directory itself as its data root.
 
 ## Persistence
 
 ```text
-%LOCALAPPDATA%\PS2Builder\Runtime\<PCSX2_VERSION>\
-    pcsx2-qt.exe
-    portable.txt
-    <PCSX2 runtime files>
-
 %LOCALAPPDATA%\PS2Builder\Games\<SERIAL>\
-    inis\
-    patches\
-    cache\
-    <other writable PCSX2 data>
+    Runtime\
+        pcsx2-qt.exe
+        portable.ini
+        inis\
+        patches\
+        cache\
+        <other PCSX2 runtime/data files>
 
 %USERPROFILE%\Saved Games\PS2Builder\MemoryCards\
     Mcd001.ps2
     Mcd002.ps2
 ```
 
-The PCSX2 runtime is cached automatically on first launch and reused by other generated discs that bundle the same runtime version. It is not installed system-wide.
+The PCSX2 runtime is cached automatically inside each game's writable directory. It is not installed system-wide.
 
 Memory cards are shared between generated discs, reproducing the behavior of using the same pair of physical memory cards across multiple games on the same PS2 console.
