@@ -19,6 +19,7 @@ public static class Player
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             "Saved Games", "PS2Builder", "MemoryCards");
         Directory.CreateDirectory(sharedSaves);
+        MemoryCardFactory.EnsureSharedCards(sharedSaves);
 
         EnsureVisualCppRuntime(data);
 
@@ -90,7 +91,7 @@ public static class Player
 
         // Keep PLAY.exe alive for the whole session. It owns the user-facing escape
         // overlay and ensures the PCSX2 interface never becomes part of normal usage.
-        Application.Run(new PlaySessionContext(process, m.Title));
+        Application.Run(new PlaySessionContext(process, m.Title, exe));
     }
 
     static string BuildRuntimeKey(DiscManifest manifest, string discRuntime)
@@ -373,8 +374,8 @@ public static class Player
         sb.AppendLine("[Pad]")
             .AppendLine("MultitapPort1 = false")
             .AppendLine("MultitapPort2 = false");
-        AppendSdlPadMapping(sb, 1, 0);
-        AppendSdlPadMapping(sb, 2, 1);
+        AppendSdlPadMapping(sb, 1, 0, includeKeyboardFallback: true);
+        AppendSdlPadMapping(sb, 2, 1, includeKeyboardFallback: false);
 
         // PLAY.exe owns the normal exit flow. Prevent Escape and fullscreen shortcuts from
         // exposing the PCSX2 UI, and disable the GUI's double-click fullscreen toggle above.
@@ -390,7 +391,7 @@ public static class Player
         return sb.ToString();
     }
 
-    static void AppendSdlPadMapping(StringBuilder sb, int padNumber, int sdlIndex)
+    static void AppendSdlPadMapping(StringBuilder sb, int padNumber, int sdlIndex, bool includeKeyboardFallback)
     {
         var d = $"SDL-{sdlIndex}";
         sb.AppendLine($"[Pad{padNumber}]")
@@ -432,6 +433,42 @@ public static class Player
             .AppendLine($"Analog = {d}/Guide")
             .AppendLine($"LargeMotor = {d}/LargeMotor")
             .AppendLine($"SmallMotor = {d}/SmallMotor");
+
+        if (includeKeyboardFallback)
+            AppendKeyboardFallback(sb);
+    }
+
+    static void AppendKeyboardFallback(StringBuilder sb)
+    {
+        // PCSX2 accepts repeated values for the same Pad binding. This keeps SDL as
+        // the primary zero-configuration controller path while making the keyboard a
+        // simultaneous fallback when no gamepad is connected.
+        sb.AppendLine("Up = Keyboard/Up")
+            .AppendLine("Right = Keyboard/Right")
+            .AppendLine("Down = Keyboard/Down")
+            .AppendLine("Left = Keyboard/Left")
+            .AppendLine("Triangle = Keyboard/I")
+            .AppendLine("Circle = Keyboard/L")
+            .AppendLine("Cross = Keyboard/K")
+            .AppendLine("Square = Keyboard/J")
+            .AppendLine("Select = Keyboard/Backspace")
+            .AppendLine("Start = Keyboard/Return")
+            .AppendLine("L1 = Keyboard/Q")
+            .AppendLine("L2 = Keyboard/1")
+            .AppendLine("R1 = Keyboard/E")
+            .AppendLine("R2 = Keyboard/3")
+            .AppendLine("L3 = Keyboard/2")
+            .AppendLine("R3 = Keyboard/4")
+            .AppendLine("LUp = Keyboard/W")
+            .AppendLine("LRight = Keyboard/D")
+            .AppendLine("LDown = Keyboard/S")
+            .AppendLine("LLeft = Keyboard/A")
+            .AppendLine("RUp = Keyboard/T")
+            .AppendLine("RRight = Keyboard/H")
+            .AppendLine("RDown = Keyboard/G")
+            .AppendLine("RLeft = Keyboard/F")
+            .AppendLine("Analog = Keyboard/Tab")
+            .AppendLine("Pressure = Keyboard/Shift");
     }
 
     static float AutoUpscale()

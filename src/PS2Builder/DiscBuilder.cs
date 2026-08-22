@@ -46,9 +46,16 @@ public static class DiscBuilder
             await File.WriteAllTextAsync(Path.Combine(data, "manifest.json"), JsonSerializer.Serialize(manifest, new JsonSerializerOptions { WriteIndented = true }));
             await File.WriteAllTextAsync(Path.Combine(data, "PCSX2_SOURCE.txt"), $"PCSX2 runtime: {runtime.Version}\r\nSource: {runtime.SourceUrl}\r\nLicense: GPL-3.0-or-later; see PCSX2 distribution files/resources for notices.\r\n");
 
-            IconFactory.Create(s.CustomIconPath, Path.Combine(data, "game.ico"));
-            var autorun = $"[AutoRun]\r\nopen=PLAY.exe\r\naction=Play {SanitizeIni(s.DisplayName)}\r\nicon=.ps2builder\\game.ico\r\nlabel={SanitizeIni(s.DisplayName)}\r\nshell=play\r\nshell\\play=Play\r\nshell\\play\\command=PLAY.exe\r\n";
-            await File.WriteAllTextAsync(Path.Combine(staging, "autorun.inf"), autorun, Encoding.ASCII);
+            // Keep the shell icon in the root of the optical volume. Explorer/AutoPlay
+            // resolve root-level .ico files more consistently than icons stored inside a
+            // hidden data directory. The file itself is hidden from normal Explorer views.
+            var rootIcon = Path.Combine(staging, "game.ico");
+            IconFactory.Create(s.CustomIconPath, rootIcon);
+            var autorun = $"[AutoRun]\r\nopen=PLAY.exe\r\naction=Play {SanitizeIni(s.DisplayName)}\r\nicon=game.ico,0\r\nlabel={SanitizeIni(s.DisplayName)}\r\nshell=play\r\nshell\\play=Play\r\nshell\\play\\command=PLAY.exe\r\n";
+            var autorunPath = Path.Combine(staging, "autorun.inf");
+            await File.WriteAllTextAsync(autorunPath, autorun, Encoding.ASCII);
+            File.SetAttributes(rootIcon, File.GetAttributes(rootIcon) | FileAttributes.Hidden | FileAttributes.System);
+            File.SetAttributes(autorunPath, File.GetAttributes(autorunPath) | FileAttributes.Hidden | FileAttributes.System);
             File.SetAttributes(data, File.GetAttributes(data) | FileAttributes.Hidden);
 
             await Task.Run(() => WindowsIsoWriter.WriteUdfIso(staging, s.OutputIso, MakeVolumeLabel(s.DisplayName)));

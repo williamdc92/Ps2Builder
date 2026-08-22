@@ -9,7 +9,7 @@ namespace PS2Builder;
 public static class GameDatabase
 {
     static readonly HttpClient Http = CreateHttp();
-    static HttpClient CreateHttp() { var h = new HttpClient(); h.DefaultRequestHeaders.UserAgent.ParseAdd("PS2Builder/0.1"); return h; }
+    static HttpClient CreateHttp() { var h = new HttpClient(); h.DefaultRequestHeaders.UserAgent.ParseAdd("PS2Builder/0.3"); return h; }
 
     public static async Task<GameInfo> DetectAsync(string imagePath)
     {

@@ -51,12 +51,13 @@ internal sealed class ExitOverlayForm : Form
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
         center.Controls.Add(layout);
 
+        var headingFontFamily = SystemFonts.MessageBoxFont?.FontFamily ?? FontFamily.GenericSansSerif;
         var heading = new Label
         {
             Text = "Exit game?",
             Dock = DockStyle.Fill,
             TextAlign = ContentAlignment.MiddleCenter,
-            Font = new Font(SystemFonts.MessageBoxFont.FontFamily, 20, FontStyle.Bold),
+            Font = new Font(headingFontFamily, 20, FontStyle.Bold),
             ForeColor = Color.White
         };
         layout.Controls.Add(heading, 0, 0);

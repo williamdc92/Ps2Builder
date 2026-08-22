@@ -10,7 +10,7 @@ public static class SteamGridDb
         if (string.IsNullOrWhiteSpace(apiKey)) return [];
         using var http = new HttpClient();
         http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("PS2Builder/0.1");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("PS2Builder/0.3");
         var searchJson = await http.GetStringAsync("https://www.steamgriddb.com/api/v2/search/autocomplete/" + Uri.EscapeDataString(title));
         using var search = JsonDocument.Parse(searchJson);
         var first = search.RootElement.GetProperty("data").EnumerateArray().FirstOrDefault();
