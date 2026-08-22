@@ -42,8 +42,8 @@ public static class RuntimeProvider
         if (file.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)) ZipFile.ExtractToDirectory(file, cache);
         else
         {
-            using var archive = ArchiveFactory.Open(file);
-            foreach (var e in archive.Entries.Where(e => !e.IsDirectory)) e.WriteToDirectory(cache, new ExtractionOptions { ExtractFullPath = true, Overwrite = true });
+            using var archive = ArchiveFactory.OpenArchive(file);
+            archive.WriteToDirectory(cache, new ExtractionOptions { ExtractFullPath = true, Overwrite = true });
         }
         FlattenSingleDirectory(cache);
         if (!File.Exists(Path.Combine(cache, "pcsx2-qt.exe"))) throw new InvalidOperationException("Runtime PCSX2 estratto, ma pcsx2-qt.exe non è stato trovato.");
