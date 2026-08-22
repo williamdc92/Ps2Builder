@@ -1,23 +1,24 @@
-using System.Runtime.InteropServices;
-
 namespace PS2Builder;
 
 internal sealed class ExitOverlayForm : Form
 {
-    const ushort XINPUT_GAMEPAD_DPAD_LEFT = 0x0004;
-    const ushort XINPUT_GAMEPAD_DPAD_RIGHT = 0x0008;
-    const ushort XINPUT_GAMEPAD_A = 0x1000;
-    const ushort XINPUT_GAMEPAD_B = 0x2000;
+    static readonly Color OverlayBackground = Color.FromArgb(10, 10, 13);
+    static readonly Color CardBackground = Color.FromArgb(27, 29, 36);
+    static readonly Color ButtonBackground = Color.FromArgb(42, 45, 55);
+    static readonly Color Accent = Color.FromArgb(72, 112, 255);
+    static readonly Color MutedText = Color.FromArgb(180, 184, 196);
 
     readonly Button continueButton;
     readonly Button exitButton;
     readonly System.Windows.Forms.Timer controllerTimer;
-    ushort previousControllerButtons;
+    readonly GamepadReader gamepadReader;
+    GamepadSnapshot previousGamepadState;
+    int selectedIndex;
 
     public event Action? ContinueRequested;
     public event Action? ExitRequested;
 
-    public ExitOverlayForm(string gameTitle, Rectangle screenBounds)
+    public ExitOverlayForm(string gameTitle, Rectangle screenBounds, string pcsx2Directory)
     {
         Text = "PS2 Builder";
         FormBorderStyle = FormBorderStyle.None;
@@ -25,39 +26,45 @@ internal sealed class ExitOverlayForm : Form
         Bounds = screenBounds;
         TopMost = true;
         ShowInTaskbar = false;
-        BackColor = Color.Black;
-        Opacity = 0.92;
+        BackColor = OverlayBackground;
+        Opacity = 0.96;
         KeyPreview = true;
+        AutoScaleMode = AutoScaleMode.Dpi;
 
-        var center = new Panel
+        var card = new Panel
         {
-            Size = new Size(540, 230),
-            BackColor = Color.FromArgb(32, 32, 32)
+            Size = new Size(560, 250),
+            BackColor = CardBackground,
+            Padding = new Padding(38, 28, 38, 24)
         };
-        Controls.Add(center);
+        card.Paint += (_, e) =>
+        {
+            using var pen = new Pen(Color.FromArgb(62, 66, 78));
+            e.Graphics.DrawRectangle(pen, 0, 0, card.Width - 1, card.Height - 1);
+        };
+        Controls.Add(card);
 
         var layout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            Padding = new Padding(34, 26, 34, 26),
             ColumnCount = 2,
             RowCount = 4
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
-        center.Controls.Add(layout);
+        card.Controls.Add(layout);
 
-        var headingFontFamily = SystemFonts.MessageBoxFont?.FontFamily ?? FontFamily.GenericSansSerif;
+        var fontFamily = SystemFonts.MessageBoxFont?.FontFamily ?? FontFamily.GenericSansSerif;
         var heading = new Label
         {
             Text = "Exit game?",
             Dock = DockStyle.Fill,
             TextAlign = ContentAlignment.MiddleCenter,
-            Font = new Font(headingFontFamily, 20, FontStyle.Bold),
+            Font = new Font(fontFamily, 21, FontStyle.Bold),
             ForeColor = Color.White
         };
         layout.Controls.Add(heading, 0, 0);
@@ -69,57 +76,71 @@ internal sealed class ExitOverlayForm : Form
             Dock = DockStyle.Fill,
             TextAlign = ContentAlignment.TopCenter,
             AutoEllipsis = true,
-            ForeColor = Color.Gainsboro
+            Font = new Font(fontFamily, 10, FontStyle.Regular),
+            ForeColor = MutedText
         };
         layout.Controls.Add(subtitle, 0, 1);
         layout.SetColumnSpan(subtitle, 2);
 
-        continueButton = new Button
-        {
-            Text = "Continue",
-            Dock = DockStyle.Fill,
-            Margin = new Padding(8),
-            TabIndex = 0
-        };
-        exitButton = new Button
-        {
-            Text = "Exit",
-            Dock = DockStyle.Fill,
-            Margin = new Padding(8),
-            TabIndex = 1
-        };
-        continueButton.Click += (_, _) => ContinueRequested?.Invoke();
-        exitButton.Click += (_, _) => ExitRequested?.Invoke();
+        continueButton = CreateChoiceButton("Continue", 0);
+        exitButton = CreateChoiceButton("Exit game", 1);
         layout.Controls.Add(continueButton, 0, 2);
         layout.Controls.Add(exitButton, 1, 2);
 
         var help = new Label
         {
-            Text = "Esc / B: continue    •    Enter / A: confirm",
+            Text = "D-pad / ← →   •   A / Enter: select   •   B / Esc: back",
             Dock = DockStyle.Fill,
             TextAlign = ContentAlignment.MiddleCenter,
-            ForeColor = Color.Silver
+            Font = new Font(fontFamily, 9, FontStyle.Regular),
+            ForeColor = MutedText
         };
         layout.Controls.Add(help, 0, 3);
         layout.SetColumnSpan(help, 2);
 
-        Resize += (_, _) => CenterPanel(center);
+        Resize += (_, _) => CenterCard(card);
         Shown += (_, _) =>
         {
-            CenterPanel(center);
-            continueButton.Select();
+            CenterCard(card);
+            SetSelection(0);
             Activate();
         };
 
-        controllerTimer = new System.Windows.Forms.Timer { Interval = 80 };
-        controllerTimer.Tick += (_, _) => PollXInput();
+        gamepadReader = new GamepadReader(pcsx2Directory);
+        controllerTimer = new System.Windows.Forms.Timer { Interval = 50 };
+        controllerTimer.Tick += (_, _) => PollGamepad();
         controllerTimer.Start();
     }
 
-    void CenterPanel(Control panel)
+    Button CreateChoiceButton(string text, int index)
     {
-        panel.Left = Math.Max(0, (ClientSize.Width - panel.Width) / 2);
-        panel.Top = Math.Max(0, (ClientSize.Height - panel.Height) / 2);
+        var button = new Button
+        {
+            Text = text,
+            Dock = DockStyle.Fill,
+            Margin = index == 0
+                ? new Padding(0, 16, 8, 16)
+                : new Padding(8, 16, 0, 16),
+            TabStop = false,
+            FlatStyle = FlatStyle.Flat,
+            UseVisualStyleBackColor = false,
+            BackColor = ButtonBackground,
+            ForeColor = Color.White,
+            Font = new Font(SystemFonts.MessageBoxFont?.FontFamily ?? FontFamily.GenericSansSerif, 11, FontStyle.Bold),
+            Cursor = Cursors.Hand
+        };
+        button.FlatAppearance.BorderSize = 1;
+        button.FlatAppearance.MouseOverBackColor = Color.FromArgb(52, 56, 68);
+        button.FlatAppearance.MouseDownBackColor = Color.FromArgb(62, 66, 80);
+        button.MouseEnter += (_, _) => SetSelection(index);
+        button.Click += (_, _) => ActivateSelection(index);
+        return button;
+    }
+
+    void CenterCard(Control card)
+    {
+        card.Left = Math.Max(0, (ClientSize.Width - card.Width) / 2);
+        card.Top = Math.Max(0, (ClientSize.Height - card.Height) / 2);
     }
 
     protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
@@ -130,68 +151,56 @@ internal sealed class ExitOverlayForm : Form
                 ContinueRequested?.Invoke();
                 return true;
             case Keys.Left:
+                SetSelection(0);
+                return true;
             case Keys.Right:
-                ToggleSelection();
+                SetSelection(1);
                 return true;
             case Keys.Enter:
-                if (exitButton.Focused)
-                    ExitRequested?.Invoke();
-                else
-                    ContinueRequested?.Invoke();
+            case Keys.Space:
+                ActivateSelection(selectedIndex);
                 return true;
         }
         return base.ProcessCmdKey(ref msg, keyData);
     }
 
-    void PollXInput()
+    void PollGamepad()
     {
-        if (!TryGetFirstControllerButtons(out var buttons))
-        {
-            previousControllerButtons = 0;
-            return;
-        }
+        var state = gamepadReader.Read();
 
-        var pressed = (ushort)(buttons & ~previousControllerButtons);
-        previousControllerButtons = buttons;
-
-        if ((pressed & (XINPUT_GAMEPAD_DPAD_LEFT | XINPUT_GAMEPAD_DPAD_RIGHT)) != 0)
-            ToggleSelection();
-        if ((pressed & XINPUT_GAMEPAD_B) != 0)
+        if (state.Left && !previousGamepadState.Left)
+            SetSelection(0);
+        if (state.Right && !previousGamepadState.Right)
+            SetSelection(1);
+        if (state.Cancel && !previousGamepadState.Cancel)
             ContinueRequested?.Invoke();
-        if ((pressed & XINPUT_GAMEPAD_A) != 0)
-        {
-            if (exitButton.Focused)
-                ExitRequested?.Invoke();
-            else
-                ContinueRequested?.Invoke();
-        }
+        if (state.Confirm && !previousGamepadState.Confirm)
+            ActivateSelection(selectedIndex);
+
+        previousGamepadState = state;
     }
 
-    void ToggleSelection()
+    void SetSelection(int index)
     {
-        if (exitButton.Focused)
-            continueButton.Select();
+        selectedIndex = index <= 0 ? 0 : 1;
+        ApplyButtonStyle(continueButton, selectedIndex == 0);
+        ApplyButtonStyle(exitButton, selectedIndex == 1);
+    }
+
+    static void ApplyButtonStyle(Button button, bool selected)
+    {
+        button.BackColor = selected ? Accent : ButtonBackground;
+        button.FlatAppearance.BorderColor = selected
+            ? Color.FromArgb(150, 177, 255)
+            : Color.FromArgb(74, 78, 92);
+    }
+
+    void ActivateSelection(int index)
+    {
+        if (index == 1)
+            ExitRequested?.Invoke();
         else
-            exitButton.Select();
-    }
-
-    static bool TryGetFirstControllerButtons(out ushort buttons)
-    {
-        buttons = 0;
-        try
-        {
-            for (uint i = 0; i < 4; i++)
-            {
-                if (XInputGetState(i, out var state) == 0)
-                {
-                    buttons = state.Gamepad.wButtons;
-                    return true;
-                }
-            }
-        }
-        catch (DllNotFoundException) { }
-        catch (EntryPointNotFoundException) { }
-        return false;
+            ContinueRequested?.Invoke();
     }
 
     protected override void Dispose(bool disposing)
@@ -200,29 +209,8 @@ internal sealed class ExitOverlayForm : Form
         {
             controllerTimer.Stop();
             controllerTimer.Dispose();
+            gamepadReader.Dispose();
         }
         base.Dispose(disposing);
     }
-
-    [StructLayout(LayoutKind.Sequential)]
-    struct XINPUT_STATE
-    {
-        public uint dwPacketNumber;
-        public XINPUT_GAMEPAD Gamepad;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    struct XINPUT_GAMEPAD
-    {
-        public ushort wButtons;
-        public byte bLeftTrigger;
-        public byte bRightTrigger;
-        public short sThumbLX;
-        public short sThumbLY;
-        public short sThumbRX;
-        public short sThumbRY;
-    }
-
-    [DllImport("xinput1_4.dll")]
-    static extern uint XInputGetState(uint dwUserIndex, out XINPUT_STATE pState);
 }

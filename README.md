@@ -146,7 +146,7 @@ The PS2 memory-card formatting implementation follows the documented filesystem/
 
 ## Project Status
 
-PS2 Builder currently implements the complete architecture described above and is intended to be compiled and tested on a real Windows environment. The runtime model uses one shared PCSX2 copy per bundled runtime version, while writable state remains isolated per game. Input is preconfigured for both standard controllers and keyboard, and shared memory cards are created in a formatted state before PCSX2 starts.
+PS2 Builder currently implements the complete architecture described above and is intended to be compiled and tested on a real Windows environment. The runtime model uses one shared PCSX2 copy per bundled runtime version, while writable state remains isolated per game. Input is preconfigured for both standard controllers and keyboard, and shared memory cards are created in a formatted state before PCSX2 starts. The exit overlay reads controllers through the SDL3 runtime bundled with PCSX2 (with XInput fallback), so any standard controller recognized by PCSX2 can also navigate the overlay using the D-pad or left stick, confirm with the south face button (A/Cross), and cancel with the east face button (B/Circle).
 
 The components most likely to require adjustments after initial testing are:
 

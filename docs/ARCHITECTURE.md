@@ -127,3 +127,17 @@ The selected per-game icon is converted into a multi-resolution Windows ICO and 
 ## Memory Card Formatting
 
 PS2 Builder owns first-run memory-card initialization rather than asking a game or the PCSX2 UI to format the card. It creates standard 8 MB raw `.ps2` images with the PS2 filesystem superblock/FAT/root directory and the 16-byte spare area for every 512-byte page. ECC bytes are generated for each 128-byte data chunk. The layout follows the public-domain mymc implementation. Existing non-empty cards are never reformatted.
+
+
+## Exit Overlay Input
+
+The exit overlay uses the `SDL3.dll` bundled with the active PCSX2 runtime as its primary controller backend. This keeps overlay navigation aligned with the controller devices recognized by PCSX2 itself. XInput is used as a fallback for Xbox-compatible controllers when SDL cannot be initialized.
+
+Controls:
+
+- D-pad or left stick: choose Continue / Exit game.
+- South face button (A / Cross): confirm.
+- East face button (B / Circle): return to the game.
+- Keyboard Left / Right: choose.
+- Enter: confirm.
+- Esc: return to the game.

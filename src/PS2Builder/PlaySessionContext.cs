@@ -174,7 +174,7 @@ internal sealed class PlaySessionContext : ApplicationContext
     {
         lastPcsx2Window = gameWindow;
         var screen = Screen.FromHandle(gameWindow);
-        var form = new ExitOverlayForm(title, screen.Bounds);
+        var form = new ExitOverlayForm(title, screen.Bounds, Path.GetDirectoryName(expectedExecutable) ?? AppContext.BaseDirectory);
         overlay = form;
 
         form.ContinueRequested += ContinueGame;
