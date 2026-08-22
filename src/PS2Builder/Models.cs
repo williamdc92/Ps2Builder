@@ -49,5 +49,5 @@ public sealed class PatchGroupInfo
     public string SourceFile { get; set; } = "";
     public string Body { get; set; } = "";
     public bool Recommended { get; set; }
-    public override string ToString() => Recommended ? $"{Name}  ★ consigliata" : Name;
+    public override string ToString() => Recommended ? $"{Name}  ★ recommended" : Name;
 }

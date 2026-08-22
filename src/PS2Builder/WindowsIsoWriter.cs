@@ -8,10 +8,14 @@ public static class WindowsIsoWriter
     // Uses Windows IMAPI2FS; no external ISO authoring program is required.
     public static void WriteUdfIso(string sourceDirectory, string outputIso, string volumeLabel)
     {
-        if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("La generazione ISO usa IMAPI2FS ed è supportata su Windows.");
-        var t = Type.GetTypeFromProgID("IMAPI2FS.MsftFileSystemImage") ?? throw new InvalidOperationException("IMAPI2FS non disponibile su questo Windows.");
+        if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("ISO generation uses IMAPI2FS and is supported on Windows only.");
+        var t = Type.GetTypeFromProgID("IMAPI2FS.MsftFileSystemImage") ?? throw new InvalidOperationException("IMAPI2FS is not available on this Windows installation.");
         dynamic fsi = Activator.CreateInstance(t)!;
-        fsi.FileSystemsToCreate = 4; // UDF, suitable for files > 4 GiB.
+        fsi.FileSystemsToCreate = 4; // UDF, suitable for files larger than 4 GiB.
+        // IMAPI2FS defaults to only 332,800 blocks (~650 MiB). A PS2 disc image
+        // is usually several GiB, so remove the media-size cap. Microsoft documents
+        // FreeMediaBlocks = 0 as an unlimited image size.
+        fsi.FreeMediaBlocks = 0;
         try { fsi.UDFRevision = 0x0201; } catch { }
         fsi.VolumeName = volumeLabel;
         fsi.Root.AddTree(sourceDirectory, false);

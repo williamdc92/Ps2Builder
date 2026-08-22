@@ -22,7 +22,7 @@ public static class DiscBuilder
             var prereqOut = Path.Combine(data, "prerequisites");
             Directory.CreateDirectory(content); Directory.CreateDirectory(firmware); Directory.CreateDirectory(runtimeOut); Directory.CreateDirectory(patchOut); Directory.CreateDirectory(prereqOut);
 
-            File.Copy(Environment.ProcessPath ?? throw new InvalidOperationException("Percorso eseguibile non disponibile."), Path.Combine(staging, "PLAY.exe"), true);
+            File.Copy(Environment.ProcessPath ?? throw new InvalidOperationException("The current executable path is not available."), Path.Combine(staging, "PLAY.exe"), true);
             var gameName = "game" + Path.GetExtension(s.GamePath).ToLowerInvariant();
             File.Copy(s.GamePath, Path.Combine(content, gameName), true);
             var biosName = Path.GetFileName(s.BiosPath);
@@ -47,7 +47,7 @@ public static class DiscBuilder
             await File.WriteAllTextAsync(Path.Combine(data, "PCSX2_SOURCE.txt"), $"PCSX2 runtime: {runtime.Version}\r\nSource: {runtime.SourceUrl}\r\nLicense: GPL-3.0-or-later; see PCSX2 distribution files/resources for notices.\r\n");
 
             IconFactory.Create(s.CustomIconPath, Path.Combine(data, "game.ico"));
-            var autorun = $"[AutoRun]\r\nopen=PLAY.exe\r\naction=Gioca a {SanitizeIni(s.DisplayName)}\r\nicon=.ps2builder\\game.ico\r\nlabel={SanitizeIni(s.DisplayName)}\r\nshell=play\r\nshell\\play=Gioca\r\nshell\\play\\command=PLAY.exe\r\n";
+            var autorun = $"[AutoRun]\r\nopen=PLAY.exe\r\naction=Play {SanitizeIni(s.DisplayName)}\r\nicon=.ps2builder\\game.ico\r\nlabel={SanitizeIni(s.DisplayName)}\r\nshell=play\r\nshell\\play=Play\r\nshell\\play\\command=PLAY.exe\r\n";
             await File.WriteAllTextAsync(Path.Combine(staging, "autorun.inf"), autorun, Encoding.ASCII);
             File.SetAttributes(data, File.GetAttributes(data) | FileAttributes.Hidden);
 
@@ -59,7 +59,7 @@ public static class DiscBuilder
     static void ValidateBios(string path)
     {
         var len = new FileInfo(path).Length;
-        if (len < 2 * 1024 * 1024 || len > 16 * 1024 * 1024) throw new InvalidOperationException("Il file BIOS non ha una dimensione plausibile per un dump PS2.");
+        if (len < 2 * 1024 * 1024 || len > 16 * 1024 * 1024) throw new InvalidOperationException("The selected BIOS file does not have a plausible size for a PS2 BIOS dump.");
     }
     static void CopyDirectory(string src, string dst)
     { foreach (var d in Directory.GetDirectories(src, "*", SearchOption.AllDirectories)) Directory.CreateDirectory(d.Replace(src, dst)); foreach (var f in Directory.GetFiles(src, "*", SearchOption.AllDirectories)) { var o = f.Replace(src, dst); Directory.CreateDirectory(Path.GetDirectoryName(o)!); File.Copy(f, o, true); } }

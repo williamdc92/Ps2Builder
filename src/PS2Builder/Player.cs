@@ -10,7 +10,7 @@ public static class Player
     {
         var data = Path.Combine(discRoot, ".ps2builder");
         var manifestPath = Path.Combine(data, "manifest.json");
-        var m = JsonSerializer.Deserialize<DiscManifest>(File.ReadAllText(manifestPath)) ?? throw new InvalidOperationException("Manifest non valido.");
+        var m = JsonSerializer.Deserialize<DiscManifest>(File.ReadAllText(manifestPath)) ?? throw new InvalidOperationException("The disc manifest is invalid.");
         var safeSerial = string.Concat(m.Serial.Select(c => char.IsLetterOrDigit(c) || c == '-' ? c : '_'));
         var localRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PS2Builder", "Games", safeSerial);
         var sharedSaves = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Saved Games", "PS2Builder", "MemoryCards");
@@ -29,8 +29,8 @@ public static class Player
 
         var exe = Path.Combine(data, m.Pcsx2ExeRelativePath);
         var game = Path.Combine(data, m.GameRelativePath);
-        if (!File.Exists(exe)) throw new FileNotFoundException("Runtime PCSX2 mancante nel disco.", exe);
-        if (!File.Exists(game)) throw new FileNotFoundException("Immagine gioco mancante nel disco.", game);
+        if (!File.Exists(exe)) throw new FileNotFoundException("The PCSX2 runtime is missing from the disc.", exe);
+        if (!File.Exists(game)) throw new FileNotFoundException("The game image is missing from the disc.", game);
 
         var args = $"-nogui -batch -fullscreen -slowboot -datapath \"{localRoot}\" -- \"{game}\"";
         Process.Start(new ProcessStartInfo(exe, args) { WorkingDirectory = Path.GetDirectoryName(exe)!, UseShellExecute = false });
@@ -42,10 +42,10 @@ public static class Player
         var vcruntime = Path.Combine(Environment.SystemDirectory, "VCRUNTIME140.dll");
         if (File.Exists(msvcp) && File.Exists(vcruntime)) return;
         var setup = Path.Combine(data, "prerequisites", "vc_redist.x64.exe");
-        if (!File.Exists(setup)) throw new InvalidOperationException("Microsoft Visual C++ Runtime non è installato e il pacchetto offline non è presente nel disco.");
+        if (!File.Exists(setup)) throw new InvalidOperationException("The required Microsoft Visual C++ Runtime is not installed and the offline installer is missing from the disc.");
         using var p = Process.Start(new ProcessStartInfo(setup, "/install /quiet /norestart") { UseShellExecute = true, Verb = "runas" });
         p?.WaitForExit();
-        if (!File.Exists(msvcp) || !File.Exists(vcruntime)) throw new InvalidOperationException("Impossibile installare il runtime Microsoft Visual C++ necessario a PCSX2.");
+        if (!File.Exists(msvcp) || !File.Exists(vcruntime)) throw new InvalidOperationException("The Microsoft Visual C++ Runtime required by PCSX2 could not be installed.");
     }
 
     static string BuildIni(DiscManifest m, string biosDir, string memcards)

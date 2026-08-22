@@ -23,12 +23,7 @@ The same binary runs in **Player Mode** when it finds `.ps2builder/manifest.json
 2. Creates the required local directories and shared memory card directory if they do not already exist.
 3. Copies the selected patches into the writable per-game data directory.
 4. Generates the required PCSX2 configuration inside the game's local datapath.
-5. Launches the bundled PCSX2 runtime using:
-
-```text
--nogui -batch -fullscreen -slowboot -datapath
-```
-
+5. Launches the bundled PCSX2 runtime using `-nogui -batch -fullscreen -slowboot -datapath`.
 6. PCSX2 reads the game and BIOS directly from the read-only disc while writing configuration, cache, runtime data and memory cards to the local PC.
 
 ## Persistence
