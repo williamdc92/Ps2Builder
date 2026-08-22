@@ -1,5 +1,7 @@
 ![PS2 Builder Logo](src/PS2Builder/Assets/logo.png)
 
+![PS2 Builder Logo](src/PS2Builder/Assets/logo.png)
+
 # PS2 Builder — Standalone PCSX2 Game Packager for Windows
 
 **Turn your own PlayStation 2 game dump into a self-contained Windows game package powered by PCSX2.**
@@ -796,9 +798,9 @@ PS2 Builder does not distribute a shared SteamGridDB API key.
 
 # Memory Card Implementation
 
-The PlayStation 2 memory-card formatting implementation follows documented PS2 filesystem and ECC behavior.
+The PlayStation 2 memory-card formatting implementation follows the documented filesystem/ECC behavior of the public-domain **mymc** project by Ross Ridge.
 
-Where applicable, implementation details were informed by publicly available documentation and existing open-source or public-domain projects related to PlayStation 2 memory-card formats.
+PS2 Builder uses **mymc** as a technical reference for creating correctly formatted PlayStation 2 memory cards, including filesystem structures and ECC/spare data behavior.
 
 ---
 
@@ -854,6 +856,8 @@ See [`LICENSE`](LICENSE) for details.
 
 PS2 Builder is built around and depends on the work of the PCSX2 project and its contributors.
 
+Special thanks to **Ross Ridge**, author of the public-domain **mymc** project, whose documentation of the PlayStation 2 memory-card filesystem and ECC behavior is used as a technical reference by PS2 Builder's memory-card implementation.
+
 Additional thanks to the developers and communities maintaining public PlayStation 2 technical documentation, compatibility information and tooling.
 
 ---
@@ -861,4 +865,3 @@ Additional thanks to the developers and communities maintaining public PlayStati
 # PS2 Builder
 
 **Package your PS2 game. Mount it. Open `PLAY.exe`. Play.**
-
