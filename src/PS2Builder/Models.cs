@@ -23,6 +23,8 @@ public sealed class DiscManifest
     public int FormatVersion { get; set; } = 1;
     public string Title { get; set; } = "PlayStation 2 Game";
     public string Serial { get; set; } = "UNKNOWN";
+    public string? Crc { get; set; }
+    public string? GameSha256 { get; set; }
     public string Region { get; set; } = "Unknown";
     public string GameRelativePath { get; set; } = @"content\game.iso";
     public string BiosFileName { get; set; } = "bios.bin";
