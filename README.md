@@ -1,3 +1,4 @@
+![PS2 Builder Logo](src/PS2Builder/Assets/logo.png)
 # PS2 Builder
 
 PS2 Builder creates a **self-contained Windows game disc** from a PS2 BIOS and game dump provided by the user.
