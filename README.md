@@ -2,11 +2,11 @@
 
 # PS2 Builder — Standalone PCSX2 Game Packager for Windows
 
-**Turn your own PS2 game dump into a self-contained Windows game disc powered by PCSX2.**
+**Turn your own PlayStation 2 game dump into a self-contained Windows game package powered by PCSX2.**
 
-PS2 Builder packages a **user-provided PlayStation 2 game dump and PS2 BIOS** together with the required PCSX2 runtime, configuration, patches and launcher into a single `.iso` file.
+PS2 Builder packages a **user-provided PS2 game dump and PlayStation 2 BIOS** together with the required PCSX2 runtime, configuration, patches, prerequisites and launcher into a single `.iso` file.
 
-The player does **not** need to install PCSX2, configure an emulator, select plugins, map a controller or manually browse for the game.
+The player does **not** need to install PCSX2, configure an emulator, map a controller or manually select the game.
 
 **Mount the generated ISO → double-click `PLAY.exe` → play.**
 
@@ -21,11 +21,12 @@ PS2 Builder creates a portable, self-contained PS2 game package for Windows.
 
 You provide:
 
-* your own legally obtained **PS2 game dump**;
+* your own legally obtained **PlayStation 2 game dump**;
 * your own legally obtained **PlayStation 2 BIOS**;
-* optional artwork and configuration choices.
+* optional artwork;
+* optional game-specific settings and patches.
 
-PS2 Builder generates:
+PS2 Builder generates a structure similar to:
 
 ```text
 GAME.iso
@@ -54,29 +55,31 @@ GAME.iso
         └── pcsx2-qt.exe + dependencies
 ```
 
-The generated disc behaves like a standalone Windows game package while using PCSX2 internally for emulation.
+The generated disc behaves like a standalone Windows game package while using PCSX2 internally for PlayStation 2 emulation.
 
-PS2 Builder **does not convert PS2 machine code into a native Windows game**. Instead, it hides the normal emulator setup process behind a dedicated `PLAY.exe` launcher and a preconfigured PCSX2 runtime.
+PS2 Builder **does not convert PS2 machine code into native Windows code**. Instead, it packages and automates the emulator environment behind a dedicated `PLAY.exe` launcher.
 
 ---
 
-## Final Player Experience
+## Player Experience
+
+The intended experience on the target PC is:
 
 ```text
-Insert / mount the disc
+Mount the generated ISO
         ↓
-Windows shows the game disc
+Open the game disc
         ↓
 PLAY.exe
         ↓
-PS2 BIOS boot
+PlayStation 2 BIOS boot
         ↓
 Game
 ```
 
-No existing PCSX2 installation is required.
+No previous PCSX2 installation is required.
 
-No emulator configuration is required.
+No manual emulator configuration is required.
 
 The target computer only needs a compatible **Windows x64** system capable of running the bundled PCSX2 version.
 
@@ -84,7 +87,7 @@ The target computer only needs a compatible **Windows x64** system capable of ru
 
 ## Why PS2 Builder?
 
-Normally, running a PS2 game on a PC requires several separate steps:
+Normally, running a PS2 game on a PC may involve several separate steps:
 
 ```text
 Install PCSX2
@@ -97,14 +100,14 @@ Configure controllers
         ↓
 Configure memory cards
         ↓
-Find patches
+Find compatibility patches
         ↓
 Select the game image
         ↓
 Launch the emulator
 ```
 
-PS2 Builder turns that into:
+PS2 Builder aims to reduce that experience to:
 
 ```text
 PLAY.exe
@@ -112,13 +115,13 @@ PLAY.exe
 Game
 ```
 
-The goal is to make an emulated PS2 title feel closer to launching a normal Windows game.
+The goal is to make launching an emulated PS2 title feel closer to launching a normal Windows game.
 
 ---
 
-## Main Features
+# Features
 
-### Self-Contained Game Disc
+## Self-Contained Game Disc
 
 PS2 Builder generates a single `.iso` containing:
 
@@ -127,21 +130,21 @@ PS2 Builder generates a single `.iso` containing:
 * the required PCSX2 runtime;
 * generated PCSX2 configuration;
 * selected compatibility patches;
-* Microsoft Visual C++ runtime installer;
+* required prerequisites;
 * game artwork;
-* the `PLAY.exe` launcher.
+* the dedicated `PLAY.exe` launcher.
 
-The original game dump is never modified.
+The original game dump is not modified.
 
-Selected patches are applied by PCSX2 at runtime.
+Selected `.pnach` patches are applied by PCSX2 at runtime.
 
 ---
 
-### No PCSX2 Installation Required
+## No PCSX2 Installation Required
 
-PS2 Builder automatically downloads the current official PCSX2 runtime during the build process and packages it with the generated game disc.
+PS2 Builder can obtain the official PCSX2 runtime during the build process and package the required files with the generated game disc.
 
-The player does not need to download, install or configure PCSX2 separately.
+The player does not need to manually download, install or configure PCSX2 before launching the game.
 
 On first launch, the bundled PCSX2 runtime is cached under:
 
@@ -149,62 +152,74 @@ On first launch, the bundled PCSX2 runtime is cached under:
 %LOCALAPPDATA%\PS2Builder\Runtimes\
 ```
 
-Games built with the same PCSX2 runtime version share one physical emulator installation instead of duplicating the complete runtime for every game.
+Games built with the same PCSX2 runtime version can share one physical emulator runtime instead of unnecessarily duplicating it for every title.
 
 ---
 
-### Per-Game Configuration
+## Per-Game Configuration
 
-Writable emulator data is stored separately for each game under:
+Writable emulator data is stored separately for each game under a structure similar to:
 
 ```text
 %LOCALAPPDATA%\PS2Builder\Runtimes\<runtime>\UserData\<SERIAL>\
 ```
 
-This includes game-specific PCSX2 configuration and cache data.
+This allows each game to maintain isolated configuration and runtime data.
 
-The game image itself remains on the read-only generated disc.
+The game image itself remains on the generated read-only disc.
 
-The BIOS is mirrored into writable game data when required because PCSX2 creates `.nvm` and `.mec` sidecar files next to the selected BIOS.
-
----
-
-### Automatic Game Identification
-
-PS2 Builder identifies the game through its `SYSTEM.CNF`.
-
-It calculates the ELF CRC using a method compatible with PCSX2, allowing different revisions of the same game to be distinguished.
-
-Game metadata such as title and region can be retrieved using the PCSX2 `GameIndex.yaml` database.
+When required by PCSX2, the user-provided BIOS can be mirrored into writable storage so that PCSX2 can create its `.nvm` and `.mec` sidecar files.
 
 ---
 
-### Automatic PCSX2 Patch Detection
+## Automatic Game Identification
 
-PS2 Builder can search the official `PCSX2/pcsx2_patches` repository using:
+PS2 Builder identifies the PlayStation 2 title from its game data.
+
+Game information can include:
+
+* serial;
+* ELF CRC;
+* title;
+* region;
+* revision-specific information.
+
+The ELF CRC is calculated using a method compatible with PCSX2, allowing different revisions of the same game to be distinguished.
+
+Game metadata can also be matched against the PCSX2 `GameIndex.yaml` database.
+
+---
+
+## Automatic PCSX2 Patch Detection
+
+PS2 Builder can search the official PCSX2 patches repository using game identifiers such as:
 
 ```text
 SERIAL + CRC
 ```
 
-Available patches can then be selected during the build process and included in the generated game package.
+Compatible patches can then be selected and included with the generated game package.
+
+This allows revision-specific PCSX2 patches to be distributed with the package without modifying the original game dump.
 
 ---
 
-### Automatic Graphics Configuration
+## Automatic Graphics Configuration
 
-PS2 Builder supports configurable internal rendering resolutions:
+PS2 Builder supports configurable internal rendering resolutions.
+
+Available profiles can include:
 
 * Automatic
 * Native
 * 2x Native
-* 3x Native (~1080p)
-* 4x Native (~1440p)
-* 6x Native (~4K)
+* 3x Native
+* 4x Native
+* 6x Native
 
-In **Automatic** mode, the player selects an internal resolution multiplier based on the target PC's desktop resolution.
+In **Automatic** mode, PS2 Builder can choose an internal resolution multiplier based on the target PC's display resolution.
 
-Current default mapping:
+A typical mapping is:
 
 | Desktop Resolution | PS2 Internal Resolution |
 | ------------------ | ----------------------: |
@@ -213,103 +228,114 @@ Current default mapping:
 | ~1440p             |               4x Native |
 | ~4K                |               6x Native |
 
-The Windows display resolution itself is not changed. Only the PS2 internal rendering resolution is affected.
+The Windows desktop resolution itself is not changed.
 
-The rendering profile can also be manually overridden during the build process.
+Only the PS2 internal rendering resolution used by PCSX2 is affected.
 
----
-
-### Automatic Renderer Selection
-
-PS2 Builder automatically selects an appropriate PCSX2 renderer for the target system.
-
-The player does not need to open the PCSX2 graphics settings before launching the game.
+The rendering profile can also be manually selected during the build process.
 
 ---
 
-### Aspect Ratio Configuration
+## Automatic Renderer Selection
 
-Supported profiles:
+PS2 Builder can automatically select an appropriate PCSX2 graphics renderer for the target Windows system.
+
+The player should not need to open PCSX2 graphics settings before launching the game.
+
+---
+
+## Aspect Ratio Configuration
+
+Supported aspect-ratio profiles can include:
 
 * Automatic
 * 4:3
 * 16:9
 
+This allows the package to ship with the intended display configuration already defined.
+
 ---
 
-### Controller Support
+## Controller Support
 
-The first two standard SDL-compatible controllers are automatically configured.
+PS2 Builder automatically configures standard SDL-compatible controllers.
 
-This includes common devices such as:
+Typical compatible devices include:
 
 * Xbox controllers;
 * DualShock controllers;
 * DualSense controllers;
 * other standard SDL-compatible gamepads.
 
-The player should not need to open PCSX2 controller settings for normal use.
+The goal is for a player to connect a controller and launch the game without opening the PCSX2 controller configuration screen.
 
 ---
 
-### Keyboard Fallback
+## Keyboard Fallback
 
-Pad 1 also receives a default keyboard configuration.
+Pad 1 can also receive a default keyboard configuration.
 
-Default bindings include:
+Typical bindings include:
 
-* Arrow keys → D-pad
-* `WASD` → Left analog stick
-* `TFGH` → Right analog stick
-* `IJKL` → Face buttons
-* nearby keyboard keys → shoulders, triggers, Start, Select and stick clicks
+```text
+Arrow Keys → D-pad
+WASD       → Left analog stick
+TFGH       → Right analog stick
+IJKL       → Face buttons
+```
 
-Controller and keyboard bindings coexist.
+Additional nearby keyboard keys can be mapped to:
+
+* L1 / R1;
+* L2 / R2;
+* Start;
+* Select;
+* L3 / R3.
+
+Controller and keyboard bindings can coexist.
 
 ---
 
-### Shared PS2 Memory Cards
+## Shared PlayStation 2 Memory Cards
 
-Memory cards are stored under:
+Memory cards are stored outside the generated read-only ISO.
+
+The default shared location is:
 
 ```text
 Saved Games\PS2Builder\MemoryCards\
 ```
 
-PS2 Builder creates standard formatted **8 MB PlayStation 2 memory cards** when they do not already exist.
+PS2 Builder can create standard formatted **8 MB PlayStation 2 memory cards** when no existing card is available.
 
-Blank or unformatted cards created by older builds can be repaired automatically.
+Existing non-empty memory cards are not overwritten.
 
-Existing non-empty memory cards are never overwritten.
-
-Because the cards are shared, compatible games can access the same virtual PS2 memory cards just as they would on a real console.
+Using shared cards allows compatible games to access the same virtual PS2 memory cards, similar to using the same physical memory card across multiple games on a real console.
 
 ---
 
-### PS2-Style Exit Experience
+## PS2-Style Exit Experience
 
-`PLAY.exe` captures the Escape key and displays a dedicated PS2 Builder exit confirmation overlay instead of exposing the normal PCSX2 pause interface.
+`PLAY.exe` can intercept the normal exit action and display a dedicated PS2 Builder exit confirmation overlay instead of exposing the standard PCSX2 pause interface.
 
-The overlay can be navigated with keyboard or controller.
+The overlay can be controlled using keyboard or controller.
 
 Typical controls:
 
 ```text
-Continue → default selection
-
-A / Cross / Enter → confirm
-B / Circle / Escape → cancel
+A / Cross / Enter     → Confirm
+B / Circle / Escape   → Cancel
 ```
 
-Controller input is read through the SDL3 runtime bundled with PCSX2, with XInput fallback.
-
-The overlay can be opened and dismissed repeatedly during the same game session.
+The goal is to keep the player inside a game-focused interface instead of exposing emulator controls during normal use.
 
 ---
 
-### Fullscreen Launch
+## Fullscreen Launch
 
-Games are started using PCSX2 command-line options including:
+Games are started through PCSX2 command-line options designed for direct launching.
+
+Typical options include:
 
 ```text
 -slowboot
@@ -320,20 +346,18 @@ Games are started using PCSX2 command-line options including:
 
 This provides:
 
-* full PS2 BIOS boot;
-* automatic fullscreen launch;
-* hidden PCSX2 interface;
-* direct game startup.
-
-Normal PCSX2 fullscreen switching behavior is restricted so the PS2 Builder exit overlay can reliably appear above the game window.
+* full PlayStation 2 BIOS boot;
+* automatic fullscreen startup;
+* hidden PCSX2 user interface;
+* direct game launch.
 
 ---
 
-### Visual C++ Runtime Handling
+## Visual C++ Runtime Handling
 
-PCSX2 may require the Microsoft Visual C++ x64 Redistributable.
+PCSX2 may require the Microsoft Visual C++ x64 Redistributable on the target computer.
 
-PS2 Builder includes the official installer inside the generated ISO:
+PS2 Builder can include the official installer inside the generated disc:
 
 ```text
 .ps2builder/
@@ -341,263 +365,290 @@ PS2 Builder includes the official installer inside the generated ISO:
     └── vc_redist.x64.exe
 ```
 
-If the required runtime is missing, the installer is launched automatically.
+If the required runtime is missing, the installer can be launched automatically.
 
-No additional download is necessary on the target PC.
+This avoids requiring the player to manually search for and download the dependency.
 
-A Windows UAC prompt may appear during this first-time installation.
+A Windows UAC prompt may appear during first-time installation.
 
 ---
 
-### Custom Game Icons
+## Custom Game Icons
 
 A custom disc icon can be selected during the build process.
 
-PS2 Builder generates a multi-resolution:
+PS2 Builder generates a Windows-compatible:
 
 ```text
 game.ico
 ```
 
-for Windows Explorer and AutoPlay.
+for use by Windows Explorer and AutoPlay.
 
-If no custom artwork is selected, PS2 Builder generates a default icon.
+If no custom artwork is selected, a default icon can be used.
 
-Optional artwork search through **SteamGridDB** is also supported using the user's own API key.
+Optional artwork integration with **SteamGridDB** is also supported using the user's own API key.
 
 PS2 Builder does not include or distribute shared SteamGridDB API keys.
 
 ---
 
-### Windows AutoPlay Integration
+## Windows AutoPlay Integration
 
-The generated `autorun.inf` uses:
+The generated `autorun.inf` can use:
 
 ```text
 shellexecute=PLAY.exe
 ```
 
-and defines a dedicated PS2 Builder shell action for the optical drive.
+and define a dedicated PS2 Builder shell action for the mounted disc.
 
-Depending on Windows configuration, mounting or inserting the disc can expose a:
+Depending on Windows configuration, mounting or inserting the disc may expose an action similar to:
 
 ```text
 Play <game title>
 ```
 
-action.
-
-If AutoPlay is disabled through user preferences or system policy, simply open the disc and double-click:
+If AutoPlay is disabled through Windows settings or system policy, the player can simply open the mounted disc and double-click:
 
 ```text
 PLAY.exe
 ```
 
-Zero-click AutoRun execution is not required.
+Automatic execution is not required.
 
 ---
 
-### Native Windows ISO Generation
+## Native Windows ISO Generation
 
-ISO/UDF creation uses Windows **IMAPI2FS**.
+ISO/UDF creation is handled through Windows **IMAPI2FS**.
 
-No separate disc-authoring utilities such as:
+This means PS2 Builder does not require separate external ISO-authoring utilities such as:
 
 * `mkisofs`;
 * ImgBurn;
-* external ISO-building software
-
-are required.
+* other third-party disc-authoring applications.
 
 ---
 
-## Building PS2 Builder
+# Building PS2 Builder
 
-### Requirements
+## Requirements
 
 * Windows 10 or Windows 11
 * .NET 8 SDK
+* x64 environment
 
-Clone the repository and run:
+Clone the repository:
+
+```powershell
+git clone https://github.com/williamdc92/Ps2Builder.git
+cd Ps2Builder
+```
+
+Restore dependencies:
 
 ```powershell
 dotnet restore
+```
 
+Publish a self-contained Windows x64 build:
+
+```powershell
 dotnet publish src/PS2Builder/PS2Builder.csproj `
     -c Release `
     -r win-x64 `
     --self-contained true
 ```
 
-Use the self-contained publish build when generating PS2 game ISOs.
+The self-contained publish build is recommended when generating PS2 game packages.
 
-The included GitHub Actions workflow also produces a Windows x64 build artifact.
+Prebuilt Windows x64 versions may also be available from the repository's **Releases** section.
 
 ---
 
-## Build Workflow
+# Build Workflow
+
+The overall process is:
 
 ```text
-PS2 BIOS
-    +
-PS2 Game Dump
-    ↓
+User-provided PS2 BIOS
+        +
+User-provided PS2 Game Dump
+        ↓
 PS2 Builder
-    ↓
-Game identification
-    ↓
-PCSX2 metadata / patches
-    ↓
-Graphics + input configuration
-    ↓
-PCSX2 runtime packaging
-    ↓
-Single self-contained ISO
-    ↓
+        ↓
+Game Identification
+        ↓
+PCSX2 Metadata / Patches
+        ↓
+Graphics + Input Configuration
+        ↓
+PCSX2 Runtime Packaging
+        ↓
+Self-Contained Windows ISO
+        ↓
 PLAY.exe
-    ↓
-PS2 BIOS
-    ↓
+        ↓
+PlayStation 2 BIOS
+        ↓
 Game
 ```
 
 ---
 
-## Internet Access
+# Internet Access
 
-During the build process, PS2 Builder may download:
+During the build process, PS2 Builder may use Internet access to obtain:
 
-* the PCSX2 runtime;
+* the official PCSX2 runtime;
 * PCSX2 game metadata;
 * PCSX2 patches;
 * optional SteamGridDB artwork;
-* other required runtime data.
+* required runtime-related data.
 
-When offline, local game detection can still work, but components that have not previously been cached cannot be downloaded.
+When offline, locally available data can still be used, but resources that have not previously been downloaded or cached cannot be retrieved.
 
-The generated game disc itself is designed so that normal emulator setup and configuration are not required on the target machine.
+Once the package has been successfully created, the player should not need to manually download or configure PCSX2 before launching the game.
 
 ---
 
-## Frequently Asked Questions
+# Frequently Asked Questions
 
-### Can PS2 Builder turn a PS2 game into a Windows EXE?
+## Can PS2 Builder turn a PS2 game into a Windows EXE?
 
 Not literally.
 
-PS2 Builder does not recompile or convert a PlayStation 2 game into native Windows x64 machine code.
+PS2 Builder does not recompile or convert PlayStation 2 machine code into native Windows x64 code.
 
-Instead, it creates a **self-contained Windows game package** containing the PS2 game, PCSX2 runtime, configuration and a dedicated `PLAY.exe` launcher.
+Instead, it creates a **self-contained Windows game package** containing:
+
+* the PS2 game dump;
+* the user-provided PS2 BIOS;
+* the PCSX2 runtime;
+* emulator configuration;
+* optional patches;
+* a dedicated `PLAY.exe` launcher.
 
 From the player's perspective, the experience becomes:
 
 ```text
-PLAY.exe → game
+PLAY.exe → Game
 ```
 
-without interacting with the emulator interface.
+without manually interacting with the emulator interface.
 
 ---
 
-### Can I play a PS2 game on Windows without installing PCSX2?
+## Can I play a PS2 game on Windows without installing PCSX2?
 
 Yes.
 
-The generated PS2 Builder disc contains the required PCSX2 runtime.
+The generated PS2 Builder package contains the required PCSX2 runtime.
 
-No previous PCSX2 installation is required.
-
----
-
-### Do I need to configure PCSX2 manually?
-
-No for the normal PS2 Builder workflow.
-
-PS2 Builder generates the required emulator configuration and handles graphics, input, fullscreen startup, memory cards and game launching automatically.
+No previous PCSX2 installation is required on the target machine.
 
 ---
 
-### Can I make a portable PS2 game for Windows?
+## Do I need to configure PCSX2 manually?
 
-That is one of the primary goals of PS2 Builder.
+Under the normal PS2 Builder workflow, no.
 
-The generated `.iso` contains the game environment required to launch the title through `PLAY.exe`.
+PS2 Builder generates the required emulator configuration and handles common settings such as:
 
-Writable data such as saves and PCSX2 configuration is stored on the Windows machine while the original game image remains on the generated disc.
+* graphics;
+* renderer;
+* internal resolution;
+* aspect ratio;
+* controllers;
+* keyboard fallback;
+* memory cards;
+* fullscreen startup;
+* game launching.
 
 ---
 
-### Can I run a PS2 game by double-clicking an EXE?
+## Can I make a portable PS2 game for Windows?
 
-Yes, after mounting or opening the generated PS2 Builder ISO.
+Yes.
 
-The player launches:
+Creating a portable, self-contained PS2 game package for Windows is one of the main goals of PS2 Builder.
+
+The generated `.iso` contains the files required to launch the game through `PLAY.exe`, while writable emulator data is stored automatically on the Windows machine.
+
+---
+
+## Can I run a PS2 game by double-clicking an EXE?
+
+Yes.
+
+After mounting or opening the generated PS2 Builder ISO, launch:
 
 ```text
 PLAY.exe
 ```
 
-which starts the bundled PCSX2 runtime and launches the packaged PS2 game automatically.
+PS2 Builder then starts the bundled PCSX2 runtime and launches the packaged game automatically.
 
 ---
 
-### Does the player ever need to see the PCSX2 interface?
+## Does the player need to see the PCSX2 interface?
 
 Under normal use, no.
 
-PS2 Builder starts PCSX2 in fullscreen batch mode with its normal GUI hidden.
+The game is started through PCSX2 in a direct-launch configuration designed to keep the standard emulator interface hidden.
 
 ---
 
-### Does PS2 Builder include PS2 games?
+## Does PS2 Builder include PlayStation 2 games?
 
 No.
 
-This repository contains no PlayStation 2 game data.
+This repository does not contain or distribute commercial PlayStation 2 game data.
 
 Users must provide their own game dumps.
 
 ---
 
-### Does PS2 Builder include a PlayStation 2 BIOS?
+## Does PS2 Builder include a PlayStation 2 BIOS?
 
 No.
 
-Sony BIOS files are not included in this repository.
+Sony PlayStation 2 BIOS files are not included in this repository.
 
 Users must provide their own legally obtained BIOS dump.
 
 ---
 
-### Does PS2 Builder modify the original game ISO?
+## Does PS2 Builder modify the original game image?
 
 No.
 
-The original game dump is preserved.
+The original game dump remains unchanged.
 
-Compatibility patches are applied by PCSX2 at runtime.
+Compatibility patches are supplied separately and applied by PCSX2 at runtime.
 
 ---
 
-### Can multiple PS2 Builder games share memory cards?
+## Can multiple PS2 Builder games share memory cards?
 
 Yes.
 
-PS2 Builder stores memory cards in a shared location:
+PS2 Builder stores virtual memory cards in a shared location:
 
 ```text
 Saved Games\PS2Builder\MemoryCards\
 ```
 
-This allows compatible games to use the same virtual PS2 cards.
+This allows compatible games to access the same virtual PS2 memory cards.
 
 ---
 
-### Can multiple games share the same PCSX2 installation?
+## Can multiple games share the same PCSX2 runtime?
 
 Yes.
 
-Games using the same bundled PCSX2 runtime version share one cached copy under:
+Games using the same bundled PCSX2 version can share one cached runtime under:
 
 ```text
 %LOCALAPPDATA%\PS2Builder\Runtimes\
@@ -607,36 +658,63 @@ while game-specific configuration remains isolated.
 
 ---
 
-### Can I burn the generated ISO to physical media?
+## Can I burn the generated ISO to physical media?
 
 Yes.
 
-The generated image can be mounted directly in Windows or burned to suitable physical media.
+The generated image can be mounted directly in Windows or written to suitable physical media.
 
-Keep in mind that a DVD9 game combined with the bundled PCSX2 runtime may exceed standard DVD5 capacity.
+Keep in mind that large PS2 game images combined with the PCSX2 runtime and additional files may exceed the capacity of standard single-layer DVDs.
 
 ---
 
-## What PS2 Builder Is Not
+## Is PS2 Builder a PS2 emulator?
+
+No.
+
+PCSX2 performs the actual PlayStation 2 emulation.
+
+PS2 Builder is a **packaging, configuration and launcher system built around PCSX2**.
+
+---
+
+# Common Use Cases
+
+PS2 Builder is designed for users who want to:
+
+* create a **portable PS2 game for Windows**;
+* build a **standalone PCSX2 game package**;
+* launch a PS2 game through a simple **Windows EXE**;
+* run a PS2 game without manually configuring PCSX2;
+* package PCSX2 together with a user-provided BIOS and game dump;
+* create a per-game PCSX2 environment;
+* automatically configure graphics and controllers for a PS2 game;
+* distribute a preconfigured PCSX2 environment where legally permitted;
+* create a console-like PS2 launching experience on Windows;
+* keep the emulator interface hidden during normal gameplay.
+
+---
+
+# What PS2 Builder Is Not
 
 PS2 Builder is not:
 
 * a PS2-to-PC source-code converter;
-* a PS2 decompiler;
+* a PlayStation 2 decompiler;
 * a native PS2 game porting tool;
 * a replacement implementation of PCSX2;
-* a source of PS2 BIOS files;
-* a source of copyrighted PS2 game images.
+* a source of PlayStation 2 BIOS files;
+* a source of copyrighted PlayStation 2 game images.
 
-It is a **Windows packaging and launcher system built around PCSX2**.
+PS2 Builder is a **Windows game packaging and launcher system powered by PCSX2**.
 
 ---
 
-## Project Status
+# Project Status
 
-PS2 Builder currently implements the architecture described above and is under active development and testing for real Windows environments.
+PS2 Builder is under active development and testing on Windows.
 
-The runtime architecture uses:
+Its runtime architecture is designed around:
 
 ```text
 Shared PCSX2 Runtime
@@ -646,17 +724,7 @@ Per-Game User Data
 Shared Memory Cards
 ```
 
-Input is automatically configured for standard controllers and keyboard, and memory cards are created in a formatted state before PCSX2 starts.
-
-Areas that may require further compatibility work include:
-
-* Windows IMAPI2FS/UDF behavior;
-* PCSX2 configuration keys across different releases;
-* PCSX2 command-line changes;
-* runtime packaging across different Windows installations;
-* game-specific compatibility behavior.
-
-The project is intentionally structured so PCSX2-specific runtime details can evolve without changing the core workflow:
+The project is intentionally structured so that PCSX2-specific behavior can evolve without changing the basic PS2 Builder workflow:
 
 ```text
 BIOS + Game Dump
@@ -667,87 +735,114 @@ Self-Contained Windows ISO
         ↓
 PLAY.exe
         ↓
-PS2 BIOS
+PlayStation 2 BIOS
         ↓
 Game
 ```
 
+Areas that may require continued compatibility work include:
+
+* Windows IMAPI2FS/UDF behavior;
+* PCSX2 configuration changes between releases;
+* PCSX2 command-line changes;
+* runtime packaging across different Windows installations;
+* graphics-driver differences;
+* controller compatibility;
+* game-specific PCSX2 behavior.
+
+Bug reports and compatibility feedback are welcome.
+
 ---
 
-## Legal and Licensing
+# Legal Notice
 
-This repository does **not** contain PlayStation 2 games or Sony BIOS files.
+This repository does **not** contain or distribute PlayStation 2 games or Sony PlayStation 2 BIOS files.
 
 Users must provide their own legally obtained game and BIOS dumps and are responsible for ensuring that their use complies with applicable laws.
 
-PCSX2 is a separate project distributed under the **GPL-3.0-or-later** license.
+PS2 Builder is not affiliated with or endorsed by Sony Interactive Entertainment.
 
-PS2 Builder downloads the official PCSX2 runtime and adds:
+PlayStation and PlayStation 2 are trademarks of Sony Interactive Entertainment.
+
+PCSX2 is a separate open-source project and is not developed or maintained by PS2 Builder.
+
+---
+
+# PCSX2 Licensing
+
+PCSX2 is distributed under the **GPL-3.0-or-later** license.
+
+When a PCSX2 runtime is included in a generated PS2 Builder package, PS2 Builder can include:
 
 ```text
 PCSX2_SOURCE.txt
 ```
 
-to generated discs containing PCSX2 runtime version and source information.
+containing information about the bundled PCSX2 runtime and its source.
 
-Anyone publicly redistributing generated images containing PCSX2 is responsible for complying with the GPL and with the licenses of dependencies bundled with PCSX2.
+Anyone redistributing generated packages containing PCSX2 is responsible for complying with the GPL and with the licenses of any dependencies bundled with PCSX2.
+
+---
+
+# SteamGridDB
 
 SteamGridDB is a separate service and is not affiliated with PS2 Builder.
 
-The PS2 memory-card formatting implementation follows the documented filesystem/ECC behavior of the public-domain **mymc** project by Ross Ridge.
+Optional SteamGridDB integration requires the user to provide their own API key.
+
+PS2 Builder does not distribute a shared SteamGridDB API key.
 
 ---
 
-## Search Terms / Related Concepts
+# Memory Card Implementation
 
-PS2 Builder may be useful if you are looking for:
+The PlayStation 2 memory-card formatting implementation follows documented PS2 filesystem and ECC behavior.
 
-* a **portable PS2 game for Windows**;
-* a **standalone PCSX2 game**;
-* a **PS2 game launcher for Windows**;
-* a way to **run a PS2 game without configuring PCSX2**;
-* a **PCSX2 game packager**;
-* a **self-contained PS2 emulator package**;
-* a way to launch a PS2 game through a simple **Windows EXE**;
-* a way to package **PCSX2 + BIOS + game configuration** together;
-* a **portable PCSX2 setup per game**;
-* a console-like way to launch PS2 games on a PC.
+Where applicable, implementation details were informed by publicly available documentation and existing open-source or public-domain projects related to PlayStation 2 memory-card formats.
 
 ---
 
-## Related Projects
+# Related Projects
 
 PS2 Builder uses **PCSX2** as its PlayStation 2 emulation runtime.
 
-* PCSX2: https://github.com/PCSX2/pcsx2
-* PCSX2 patches: https://github.com/PCSX2/pcsx2_patches
-* SteamGridDB: https://www.steamgriddb.com/
+* PCSX2
+  https://github.com/PCSX2/pcsx2
+
+* PCSX2 Patches
+  https://github.com/PCSX2/pcsx2_patches
+
+* SteamGridDB
+  https://www.steamgriddb.com/
 
 ---
 
-## Contributing
+# Contributing
 
 Bug reports, compatibility reports and pull requests are welcome.
 
-When reporting a game-specific issue, useful information includes:
+When reporting a game-specific issue, please include as much of the following information as possible:
 
 ```text
 Game title:
 Serial:
 CRC:
 Region:
+Game revision:
 Windows version:
+CPU:
 GPU:
+Controller:
 PCSX2 runtime version:
 PS2 Builder version:
 Problem description:
 ```
 
-Please do not upload or attach copyrighted game images or Sony BIOS files to issues.
+Please **do not upload copyrighted game images or Sony BIOS files** to GitHub issues, pull requests or discussions.
 
 ---
 
-## License
+# License
 
 PS2 Builder is distributed under the license included in this repository.
 
@@ -755,6 +850,15 @@ See [`LICENSE`](LICENSE) for details.
 
 ---
 
-**PS2 Builder**
+# Credits
 
-*Package your PS2 game. Mount it. Open `PLAY.exe`. Play.*
+PS2 Builder is built around and depends on the work of the PCSX2 project and its contributors.
+
+Additional thanks to the developers and communities maintaining public PlayStation 2 technical documentation, compatibility information and tooling.
+
+---
+
+# PS2 Builder
+
+**Package your PS2 game. Mount it. Open `PLAY.exe`. Play.**
+
