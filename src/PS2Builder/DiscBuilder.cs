@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
@@ -25,6 +26,13 @@ public static class DiscBuilder
             File.Copy(Environment.ProcessPath ?? throw new InvalidOperationException("The current executable path is not available."), Path.Combine(staging, "PLAY.exe"), true);
             var gameName = "game" + Path.GetExtension(s.GamePath).ToLowerInvariant();
             File.Copy(s.GamePath, Path.Combine(content, gameName), true);
+
+            // The PCSX2 ELF CRC is the preferred revision identity. Some image formats
+            // cannot currently be parsed deeply enough to obtain it, so only in that
+            // fallback case compute a stable SHA-256 of the original game dump.
+            var gameSha256 = string.IsNullOrWhiteSpace(info.Crc)
+                ? await Task.Run(() => ComputeSha256(s.GamePath))
+                : null;
             var biosName = Path.GetFileName(s.BiosPath);
             File.Copy(s.BiosPath, Path.Combine(firmware, biosName), true);
             CopyDirectory(runtime.Directory, runtimeOut);
@@ -38,13 +46,19 @@ public static class DiscBuilder
             }
 
             var manifest = new DiscManifest {
-                Title = s.DisplayName, Serial = info.Serial, Region = info.Region,
+                Title = s.DisplayName, Serial = info.Serial, Crc = info.Crc, GameSha256 = gameSha256, Region = info.Region,
                 GameRelativePath = @"content\" + gameName, BiosFileName = biosName,
                 Resolution = s.Resolution, Aspect = s.Aspect, EnabledPatchGroups = s.EnabledPatchGroups,
                 RuntimeVersion = runtime.Version, RuntimeSource = runtime.SourceUrl
             };
             await File.WriteAllTextAsync(Path.Combine(data, "manifest.json"), JsonSerializer.Serialize(manifest, new JsonSerializerOptions { WriteIndented = true }));
-            await File.WriteAllTextAsync(Path.Combine(data, "PCSX2_SOURCE.txt"), $"PCSX2 runtime: {runtime.Version}\r\nSource: {runtime.SourceUrl}\r\nLicense: GPL-3.0-or-later; see PCSX2 distribution files/resources for notices.\r\n");
+            var pcsx2Source =
+                $"PCSX2 version: {runtime.Version}\r\n" +
+                $"Binary package: {runtime.SourceUrl}\r\n" +
+                $"Source code: {runtime.SourceCodeUrl}\r\n" +
+                "Project: https://github.com/PCSX2/pcsx2\r\n" +
+                "License: GPL-3.0-or-later; see the PCSX2 distribution and source tree for third-party notices.\r\n";
+            await File.WriteAllTextAsync(Path.Combine(data, "PCSX2_SOURCE.txt"), pcsx2Source, Encoding.UTF8);
 
             // Keep the shell icon in the root of the optical volume. Explorer/AutoPlay
             // resolve root-level .ico files more consistently than icons stored inside a
@@ -76,6 +90,12 @@ public static class DiscBuilder
             await Task.Run(() => WindowsIsoWriter.WriteUdfIso(staging, s.OutputIso, MakeVolumeLabel(s.DisplayName)));
         }
         finally { try { Directory.Delete(staging, true); } catch { } }
+    }
+
+    static string ComputeSha256(string path)
+    {
+        using var stream = File.OpenRead(path);
+        return Convert.ToHexString(SHA256.HashData(stream));
     }
 
     static void ValidateBios(string path)

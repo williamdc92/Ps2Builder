@@ -41,13 +41,23 @@ public static class GameDatabase
 
     static async Task EnrichPatches(GameInfo info)
     {
+        // PCSX2 patch files are revision-specific (SERIAL_CRC.pnach). If the ELF CRC
+        // could not be determined, selecting every SERIAL_* file risks applying a patch
+        // made for a different revision of the game. In that case, disable automatic
+        // patch discovery rather than guessing.
+        if (string.IsNullOrWhiteSpace(info.Crc))
+            return;
+
         try
         {
+            var expectedName = $"{info.Serial}_{info.Crc}.pnach";
             using var response = await Http.GetAsync("https://github.com/PCSX2/pcsx2_patches/archive/refs/heads/main.zip");
             response.EnsureSuccessStatusCode();
             using var ms = new MemoryStream(await response.Content.ReadAsByteArrayAsync());
             using var zip = new ZipArchive(ms, ZipArchiveMode.Read);
-            foreach (var e in zip.Entries.Where(e => e.FullName.Contains("/patches/") && e.Name.EndsWith(".pnach", StringComparison.OrdinalIgnoreCase) && (info.Crc is not null ? e.Name.Equals($"{info.Serial}_{info.Crc}.pnach", StringComparison.OrdinalIgnoreCase) : e.Name.StartsWith(info.Serial + "_", StringComparison.OrdinalIgnoreCase))))
+            foreach (var e in zip.Entries.Where(e =>
+                e.FullName.Contains("/patches/") &&
+                e.Name.Equals(expectedName, StringComparison.OrdinalIgnoreCase)))
             {
                 using var sr = new StreamReader(e.Open());
                 var text = await sr.ReadToEndAsync();

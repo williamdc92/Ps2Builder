@@ -5,7 +5,7 @@ using SharpCompress.Common;
 
 namespace PS2Builder;
 
-public sealed record RuntimePackage(string Directory, string Version, string SourceUrl);
+public sealed record RuntimePackage(string Directory, string Version, string SourceUrl, string SourceCodeUrl);
 
 public static class RuntimeProvider
 {
@@ -32,7 +32,11 @@ public static class RuntimeProvider
         {
             var m = JsonSerializer.Deserialize<RuntimeMarker>(await File.ReadAllTextAsync(marker));
             if (m != null)
-                return new RuntimePackage(cache, m.Version, m.SourceUrl);
+                return new RuntimePackage(
+                    cache,
+                    m.Version,
+                    m.SourceUrl,
+                    string.IsNullOrWhiteSpace(m.SourceCodeUrl) ? BuildSourceCodeUrl(m.Version) : m.SourceCodeUrl);
         }
 
         using var resp = await Http.GetAsync("https://api.github.com/repos/PCSX2/pcsx2/releases/latest");
@@ -40,6 +44,7 @@ public static class RuntimeProvider
 
         using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
         var version = doc.RootElement.GetProperty("tag_name").GetString() ?? "latest";
+        var sourceCodeUrl = BuildSourceCodeUrl(version);
 
         // GitHub releases also contain a Windows x64 *symbols* archive.  The old
         // filter only checked for "windows" + "x64" and could therefore select
@@ -106,17 +111,21 @@ public static class RuntimeProvider
                 {
                     Version = version,
                     SourceUrl = asset.Url,
+                    SourceCodeUrl = sourceCodeUrl,
                     AssetName = asset.Name
                 },
                 new JsonSerializerOptions { WriteIndented = true }));
 
-            return new RuntimePackage(cache, version, asset.Url);
+            return new RuntimePackage(cache, version, asset.Url, sourceCodeUrl);
         }
         finally
         {
             try { File.Delete(tempFile); } catch { }
         }
     }
+
+    static string BuildSourceCodeUrl(string version) =>
+        $"https://github.com/PCSX2/pcsx2/archive/refs/tags/{Uri.EscapeDataString(version)}.tar.gz";
 
     static bool IsWindowsPortableRuntime(string name)
     {
@@ -161,6 +170,7 @@ public static class RuntimeProvider
     {
         public string Version { get; set; } = string.Empty;
         public string SourceUrl { get; set; } = string.Empty;
+        public string SourceCodeUrl { get; set; } = string.Empty;
         public string AssetName { get; set; } = string.Empty;
     }
 }

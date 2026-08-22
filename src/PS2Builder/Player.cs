@@ -15,6 +15,7 @@ public static class Player
             ?? throw new InvalidOperationException("The disc manifest is invalid.");
 
         var safeSerial = SanitizePathComponent(m.Serial, "UNKNOWN");
+        var gameDataKey = BuildGameDataKey(m);
         var sharedSaves = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             "Saved Games", "PS2Builder", "MemoryCards");
@@ -38,11 +39,24 @@ public static class Player
         // stored below UserData so PCSX2 2.6.x can reach it with a portable.txt path
         // that never contains fragile ".." components.
         var sharedRuntime = EnsureSharedRuntime(discRuntime, m, runtimeKey);
-        var gameDataRoot = Path.Combine(sharedRuntime, "UserData", safeSerial);
+        var gameDataRoot = Path.Combine(sharedRuntime, "UserData", gameDataKey);
+        var hadRevisionData = Directory.Exists(gameDataRoot) &&
+            Directory.EnumerateFileSystemEntries(gameDataRoot).Any();
+
+        // v0.3.2 and earlier keyed writable data by serial only. Migrate that data once
+        // for known serials so existing settings survive the switch to revision-aware
+        // SERIAL+CRC (or hash fallback) directories. Never migrate UNKNOWN because old
+        // builds could have mixed unrelated unidentified games in that folder.
+        var migratedSerialData = !hadRevisionData &&
+            MigrateSerialOnlyGameData(sharedRuntime, safeSerial, gameDataKey, gameDataRoot);
         Directory.CreateDirectory(gameDataRoot);
 
-        MigrateLegacyPerGameRuntime(safeSerial, gameDataRoot);
-        ConfigurePortableDataRoot(sharedRuntime, safeSerial);
+        if (!hadRevisionData &&
+            !migratedSerialData &&
+            !safeSerial.Equals("UNKNOWN", StringComparison.OrdinalIgnoreCase))
+            MigrateLegacyPerGameRuntime(safeSerial, gameDataRoot);
+
+        ConfigurePortableDataRoot(sharedRuntime, gameDataKey);
 
         var iniDir = Path.Combine(gameDataRoot, "inis");
         var patchDir = Path.Combine(gameDataRoot, "patches");
@@ -92,6 +106,28 @@ public static class Player
         // Keep PLAY.exe alive for the whole session. It owns the user-facing escape
         // overlay and ensures the PCSX2 interface never becomes part of normal usage.
         Application.Run(new PlaySessionContext(process, m.Title, exe));
+    }
+
+    static string BuildGameDataKey(DiscManifest manifest)
+    {
+        var serial = SanitizePathComponent(manifest.Serial, "UNKNOWN");
+
+        if (!string.IsNullOrWhiteSpace(manifest.Crc))
+        {
+            var crc = new string(manifest.Crc.Where(Uri.IsHexDigit).ToArray()).ToUpperInvariant();
+            if (crc.Length > 0)
+                return $"{serial}-{crc}";
+        }
+
+        if (!string.IsNullOrWhiteSpace(manifest.GameSha256))
+        {
+            var hash = new string(manifest.GameSha256.Where(Uri.IsHexDigit).ToArray()).ToUpperInvariant();
+            if (hash.Length >= 16)
+                return $"{serial}-SHA256-{hash[..16]}";
+        }
+
+        // Backward compatibility for discs built before revision/hash identity existed.
+        return serial;
     }
 
     static string BuildRuntimeKey(DiscManifest manifest, string discRuntime)
@@ -174,13 +210,13 @@ public static class Player
         return runtimeRoot;
     }
 
-    static void ConfigurePortableDataRoot(string runtimeRoot, string safeSerial)
+    static void ConfigurePortableDataRoot(string runtimeRoot, string gameDataKey)
     {
         // PCSX2 2.6.x combines AppRoot with the text in portable.txt. Keep the selected
         // data directory below AppRoot so the redirect is a simple child path and never
         // relies on parent traversal. A runtime lock is held for the entire session,
         // because portable.txt is intentionally shared by the one runtime instance.
-        var relativeDataRoot = Path.Combine("UserData", safeSerial);
+        var relativeDataRoot = Path.Combine("UserData", gameDataKey);
         var portableTxt = Path.Combine(runtimeRoot, "portable.txt");
         File.WriteAllText(portableTxt, relativeDataRoot, new UTF8Encoding(false));
         File.SetAttributes(portableTxt, FileAttributes.Normal);
@@ -193,6 +229,32 @@ public static class Player
             File.SetAttributes(portableIni, FileAttributes.Normal);
             File.Delete(portableIni);
         }
+    }
+
+    static bool MigrateSerialOnlyGameData(
+        string runtimeRoot,
+        string safeSerial,
+        string gameDataKey,
+        string destinationDataRoot)
+    {
+        if (safeSerial.Equals("UNKNOWN", StringComparison.OrdinalIgnoreCase) ||
+            gameDataKey.Equals(safeSerial, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var sourceDataRoot = Path.Combine(runtimeRoot, "UserData", safeSerial);
+        if (!Directory.Exists(sourceDataRoot))
+            return false;
+
+        if (Directory.Exists(destinationDataRoot) &&
+            Directory.EnumerateFileSystemEntries(destinationDataRoot).Any())
+            return false;
+
+        CopyDirectoryAsWritable(sourceDataRoot, destinationDataRoot);
+
+        // Keep the serial-only source intact: it may contain state shared by multiple
+        // revisions created with older PS2 Builder versions. The new revision-specific
+        // directory is independent from this point onward.
+        return true;
     }
 
     static void MigrateLegacyPerGameRuntime(string safeSerial, string destinationDataRoot)
