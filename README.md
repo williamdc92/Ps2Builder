@@ -1,7 +1,5 @@
 ![PS2 Builder Logo](src/PS2Builder/Assets/logo.png)
 
-![PS2 Builder Logo](src/PS2Builder/Assets/logo.png)
-
 # PS2 Builder — Standalone PCSX2 Game Packager for Windows
 
 **Turn your own PlayStation 2 game dump into a self-contained Windows game package powered by PCSX2.**
