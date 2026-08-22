@@ -18,8 +18,17 @@ public static class Player
         Directory.CreateDirectory(Path.Combine(localRoot, "inis")); Directory.CreateDirectory(Path.Combine(localRoot, "patches"));
 
         // Selected patch files are copied from the read-only disc into PCSX2's writable data path.
+        // Files originating from optical media may carry the ReadOnly attribute. Always normalize
+        // the local copy so subsequent launches can update/replace it without elevation.
         var discPatches = Path.Combine(data, "patches");
-        if (Directory.Exists(discPatches)) foreach (var f in Directory.GetFiles(discPatches, "*.pnach")) File.Copy(f, Path.Combine(localRoot, "patches", Path.GetFileName(f)), true);
+        if (Directory.Exists(discPatches))
+        {
+            foreach (var f in Directory.GetFiles(discPatches, "*.pnach"))
+            {
+                var destination = Path.Combine(localRoot, "patches", Path.GetFileName(f));
+                CopyAsWritable(f, destination);
+            }
+        }
 
         var biosDir = Path.Combine(data, "firmware");
         var ini = Path.Combine(localRoot, "inis", "PCSX2.ini");
@@ -34,6 +43,27 @@ public static class Player
 
         var args = $"-nogui -batch -fullscreen -slowboot -datapath \"{localRoot}\" -- \"{game}\"";
         Process.Start(new ProcessStartInfo(exe, args) { WorkingDirectory = Path.GetDirectoryName(exe)!, UseShellExecute = false });
+    }
+
+    static void CopyAsWritable(string source, string destination)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+
+        if (File.Exists(destination))
+        {
+            // A previous version of PS2 Builder may have copied the ReadOnly attribute
+            // from the mounted ISO/DVD. Clear it before replacing the file.
+            var attributes = File.GetAttributes(destination);
+            if ((attributes & FileAttributes.ReadOnly) != 0)
+                File.SetAttributes(destination, attributes & ~FileAttributes.ReadOnly);
+        }
+
+        using (var input = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read))
+        using (var output = new FileStream(destination, FileMode.Create, FileAccess.Write, FileShare.None))
+            input.CopyTo(output);
+
+        // Do not propagate read-only/optical-media attributes to the writable local copy.
+        File.SetAttributes(destination, FileAttributes.Normal);
     }
 
     static void EnsureVisualCppRuntime(string data)
