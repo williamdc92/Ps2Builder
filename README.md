@@ -36,7 +36,7 @@ The target PC only needs to run a Windows x64 version compatible with the bundle
 - Automatic PCSX2 renderer selection.
 - Automatic controller mapping for the first two standard SDL gamepads. Xbox controllers, DualShock/DualSense controllers and other standard SDL-compatible gamepads can be used without opening the PCSX2 settings UI.
 - Automatic keyboard fallback on Pad 1. The default layout uses arrow keys for the D-pad, WASD for the left analog stick, TFGH for the right analog stick, IJKL for the face buttons and sensible nearby keys for shoulders, triggers, Start/Select and stick clicks. Controller and keyboard bindings coexist.
-- PS2 Builder exit overlay: Escape is captured by `PLAY.exe` through a low-level Windows keyboard hook and opens a confirmation overlay with **Continue** selected by default instead of exposing the PCSX2 pause menu. A second Escape/B cancels; Enter/A confirms.
+- PS2 Builder exit overlay: Escape is captured by `PLAY.exe` through a low-level Windows keyboard hook and opens a reusable confirmation overlay with **Continue** selected by default instead of exposing the PCSX2 pause menu. The overlay can be opened and dismissed repeatedly during the same session. A second Escape/B cancels; Enter/A confirms.
 - PCSX2 double-click fullscreen switching and the normal fullscreen hotkey are disabled. Exclusive fullscreen control is also disabled so the PS2 Builder exit overlay can reliably appear above the game window.
 - Full PS2 BIOS boot using `-slowboot`.
 - Fullscreen launch using `-fullscreen`.
@@ -52,7 +52,7 @@ The target PC only needs to run a Windows x64 version compatible with the bundle
 - `PS2Builder.exe` and the copied `PLAY.exe` have a built-in multi-resolution PS2 Builder application icon. The executable icon remains stable; the selected per-game artwork is used for the disc/AutoPlay icon.
 - Default PS2 Builder disc icon automatically generated when no custom icon is selected.
 - Optional icon search through SteamGridDB using the user's own API key.
-- `autorun.inf` used for disc name, disc icon and AutoPlay action. Automatic AutoRun execution is not required.
+- `autorun.inf` uses `shellexecute=PLAY.exe` for the AutoPlay application action and a dedicated `ps2builderplay` shell verb as the optical drive default double-click action. Automatic zero-click AutoRun execution is not required.
 - ISO/UDF image generation through **Windows IMAPI2FS**, without requiring `mkisofs`, ImgBurn or external disc-authoring software.
 
 ## Build

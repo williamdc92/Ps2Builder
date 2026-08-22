@@ -51,7 +51,22 @@ public static class DiscBuilder
             // hidden data directory. The file itself is hidden from normal Explorer views.
             var rootIcon = Path.Combine(staging, "game.ico");
             IconFactory.Create(s.CustomIconPath, rootIcon);
-            var autorun = $"[AutoRun]\r\nopen=PLAY.exe\r\naction=Play {SanitizeIni(s.DisplayName)}\r\nicon=game.ico,0\r\nlabel={SanitizeIni(s.DisplayName)}\r\nshell=play\r\nshell\\play=Play\r\nshell\\play\\command=PLAY.exe\r\n";
+            // Use a project-specific shell verb rather than the generic "play" verb.
+            // Windows uses this verb as the optical drive's default double-click action,
+            // while action+shellexecute provide the AutoPlay entry shown when the disc is
+            // inserted or mounted. Do not set UseAutoPlay=1: on modern Windows that can
+            // suppress the application action from the AutoPlay chooser.
+            var displayName = SanitizeIni(s.DisplayName);
+            var autorun =
+                "[AutoRun]\r\n" +
+                "shellexecute=PLAY.exe\r\n" +
+                $"action=Play {displayName}\r\n" +
+                "icon=game.ico,0\r\n" +
+                "defaulticon=game.ico,0\r\n" +
+                $"label={displayName}\r\n" +
+                "shell=ps2builderplay\r\n" +
+                $"shell\\ps2builderplay=Play {displayName}\r\n" +
+                "shell\\ps2builderplay\\command=PLAY.exe\r\n";
             var autorunPath = Path.Combine(staging, "autorun.inf");
             await File.WriteAllTextAsync(autorunPath, autorun, Encoding.ASCII);
             File.SetAttributes(rootIcon, File.GetAttributes(rootIcon) | FileAttributes.Hidden | FileAttributes.System);

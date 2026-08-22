@@ -17,6 +17,7 @@ internal sealed class PlaySessionContext : ApplicationContext
     const uint WM_SYSKEYDOWN = 0x0104;
     const uint WM_SYSKEYUP = 0x0105;
     const uint WM_CLOSE = 0x0010;
+    const int SW_RESTORE = 9;
 
     readonly Process process;
     readonly string title;
@@ -29,6 +30,7 @@ internal sealed class PlaySessionContext : ApplicationContext
     bool escapeKeyDown;
     bool fallbackEscapeWasDown;
     bool exitRequested;
+    int focusRestoreAttempts;
     IntPtr lastPcsx2Window;
     ExitOverlayForm? overlay;
 
@@ -55,7 +57,8 @@ internal sealed class PlaySessionContext : ApplicationContext
         if (process.HasExited)
         {
             timer.Stop();
-            overlay?.Close();
+            if (overlay is not null && !overlay.IsDisposed)
+                overlay.Close();
             ExitThread();
             return;
         }
@@ -64,23 +67,39 @@ internal sealed class PlaySessionContext : ApplicationContext
         if (BelongsToThisPcsx2(foreground))
             lastPcsx2Window = foreground;
 
+        if (focusRestoreAttempts > 0 && (overlay is null || !overlay.Visible))
+        {
+            RestoreGameFocus();
+            foreground = NativeMethods.GetForegroundWindow();
+            if (BelongsToThisPcsx2(foreground))
+                focusRestoreAttempts = 0;
+            else
+                focusRestoreAttempts--;
+        }
+
         // The low-level hook is the primary path. Polling is only a fallback for
         // systems where the hook could not be installed.
         if (keyboardHook == IntPtr.Zero)
         {
             var escapeIsDown = (NativeMethods.GetAsyncKeyState(VK_ESCAPE) & 0x8000) != 0;
-            if (escapeIsDown && !fallbackEscapeWasDown && BelongsToThisPcsx2(foreground))
-                Interlocked.Exchange(ref escapeRequested, 1);
+            if (escapeIsDown && !fallbackEscapeWasDown &&
+                ((overlay?.Visible ?? false) || BelongsToThisPcsx2(foreground)))
+            {
+                if (overlay?.Visible ?? false)
+                    Interlocked.Exchange(ref overlayContinueRequested, 1);
+                else
+                    Interlocked.Exchange(ref escapeRequested, 1);
+            }
             fallbackEscapeWasDown = escapeIsDown;
         }
 
-        if (Interlocked.Exchange(ref overlayContinueRequested, 0) != 0 && overlay is not null)
+        if (Interlocked.Exchange(ref overlayContinueRequested, 0) != 0 && overlay?.Visible == true)
         {
             ContinueGame();
             return;
         }
 
-        if (Interlocked.Exchange(ref escapeRequested, 0) != 0 && overlay is null)
+        if (Interlocked.Exchange(ref escapeRequested, 0) != 0 && (overlay is null || !overlay.Visible))
         {
             var gameWindow = BelongsToThisPcsx2(foreground)
                 ? foreground
@@ -109,35 +128,30 @@ internal sealed class PlaySessionContext : ApplicationContext
                     var isDown = message is WM_KEYDOWN or WM_SYSKEYDOWN;
                     var isUp = message is WM_KEYUP or WM_SYSKEYUP;
                     var foreground = NativeMethods.GetForegroundWindow();
-                    var overlayForm = overlay;
-                    var overlayOwnsInput = overlayForm is not null &&
-                        !overlayForm.IsDisposed &&
-                        overlayForm.IsHandleCreated &&
-                        foreground == overlayForm.Handle;
+                    var overlayVisible = overlay is { IsDisposed: false, Visible: true };
                     var gameOwnsInput = BelongsToThisPcsx2(foreground);
 
-                    if (overlayOwnsInput || gameOwnsInput)
+                    // Always clear the edge latch on key-up, even if focus changed while
+                    // the overlay was opening/closing. This makes Escape reusable for the
+                    // complete session instead of becoming a one-shot trigger.
+                    if (isUp)
+                        escapeKeyDown = false;
+
+                    if (overlayVisible || gameOwnsInput)
                     {
                         if (isDown && !escapeKeyDown)
                         {
                             escapeKeyDown = true;
-                            if (overlayOwnsInput)
+                            if (overlayVisible)
                                 Interlocked.Exchange(ref overlayContinueRequested, 1);
                             else
                                 Interlocked.Exchange(ref escapeRequested, 1);
-                        }
-                        else if (isUp)
-                        {
-                            escapeKeyDown = false;
                         }
 
                         // PLAY.exe owns Escape for the entire game session. Swallow both
                         // key-down and key-up so the PCSX2 UI never receives the key.
                         return (IntPtr)1;
                     }
-
-                    if (isUp)
-                        escapeKeyDown = false;
                 }
             }
         }
@@ -173,34 +187,59 @@ internal sealed class PlaySessionContext : ApplicationContext
     void ShowExitOverlay(IntPtr gameWindow)
     {
         lastPcsx2Window = gameWindow;
-        var screen = Screen.FromHandle(gameWindow);
-        var form = new ExitOverlayForm(title, screen.Bounds, Path.GetDirectoryName(expectedExecutable) ?? AppContext.BaseDirectory);
-        overlay = form;
+        focusRestoreAttempts = 0;
 
-        form.ContinueRequested += ContinueGame;
-        form.ExitRequested += ExitGame;
-        form.FormClosed += (_, _) =>
+        if (overlay is null || overlay.IsDisposed)
         {
-            if (ReferenceEquals(overlay, form))
-                overlay = null;
-            if (!exitRequested && !process.HasExited)
-                RestoreGameFocus();
-        };
+            overlay = new ExitOverlayForm(
+                title,
+                Screen.FromHandle(gameWindow).Bounds,
+                Path.GetDirectoryName(expectedExecutable) ?? AppContext.BaseDirectory);
+            overlay.ContinueRequested += ContinueGame;
+            overlay.ExitRequested += ExitGame;
+        }
+        else
+        {
+            overlay.PrepareForShow(Screen.FromHandle(gameWindow).Bounds);
+        }
 
-        form.Show();
-        form.Activate();
+        if (!overlay.Visible)
+            overlay.Show();
+        overlay.Activate();
+        overlay.BringToFront();
     }
 
     void ContinueGame()
     {
-        overlay?.Close();
+        if (overlay is { IsDisposed: false, Visible: true })
+            overlay.HideOverlay();
+
+        // Preserve the real physical state of Escape. If the user closed the overlay
+        // with Escape, the key remains latched until the matching key-up arrives.
+        escapeKeyDown = (NativeMethods.GetAsyncKeyState(VK_ESCAPE) & 0x8000) != 0;
+        Interlocked.Exchange(ref escapeRequested, 0);
+        Interlocked.Exchange(ref overlayContinueRequested, 0);
+
+        // Windows can reject a single cross-process foreground request. Retry briefly
+        // from the session timer so the PCSX2 render window reliably regains focus and
+        // subsequent Escape presses continue to belong to the game session.
+        focusRestoreAttempts = 12;
         RestoreGameFocus();
     }
 
     void RestoreGameFocus()
     {
-        if (lastPcsx2Window != IntPtr.Zero)
-            NativeMethods.SetForegroundWindow(lastPcsx2Window);
+        if (lastPcsx2Window == IntPtr.Zero)
+        {
+            try { lastPcsx2Window = process.MainWindowHandle; } catch { }
+        }
+
+        if (lastPcsx2Window == IntPtr.Zero)
+            return;
+
+        NativeMethods.ShowWindow(lastPcsx2Window, SW_RESTORE);
+        NativeMethods.BringWindowToTop(lastPcsx2Window);
+        NativeMethods.SetForegroundWindow(lastPcsx2Window);
     }
 
     void ExitGame()
@@ -208,7 +247,10 @@ internal sealed class PlaySessionContext : ApplicationContext
         if (exitRequested)
             return;
         exitRequested = true;
-        overlay?.Close();
+        focusRestoreAttempts = 0;
+
+        if (overlay is { IsDisposed: false })
+            overlay.HideOverlay();
 
         try
         {
@@ -283,6 +325,14 @@ internal sealed class PlaySessionContext : ApplicationContext
         [DllImport("user32.dll")]
         [return: MarshalAs(UnmanagedType.Bool)]
         internal static extern bool SetForegroundWindow(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool BringWindowToTop(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
 
         [DllImport("user32.dll", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]

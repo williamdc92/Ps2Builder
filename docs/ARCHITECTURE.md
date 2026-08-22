@@ -90,7 +90,7 @@ PS2 Builder overlay
    └── Exit
 ```
 
-The overlay supports keyboard and mouse input and basic XInput controller navigation. Escape is intercepted before PCSX2 receives it. Pressing Escape a second time or controller B cancels the overlay; Enter/A confirms the selected action. Because PCSX2 pauses on focus loss, opening the overlay also pauses the emulation session.
+The overlay supports keyboard, mouse, SDL gamepads and XInput fallback navigation. It is created once and hidden/reused for the lifetime of the play session, so Escape can open it repeatedly. Escape is intercepted before PCSX2 receives it. Pressing Escape a second time or controller B cancels the overlay; Enter/A confirms the selected action. After dismissal, PLAY.exe retries focus restoration briefly so the PCSX2 render window reliably becomes active again. Because PCSX2 pauses on focus loss, opening the overlay also pauses the emulation session.
 
 Double-click fullscreen switching is disabled in PCSX2 configuration, the normal fullscreen hotkey is explicitly unbound, and exclusive fullscreen control is disabled so the PS2 Builder overlay can reliably appear above the game window.
 
@@ -120,7 +120,7 @@ Pad 2 is automatically mapped to the second SDL controller.
 
 ## Disc and Executable Icons
 
-The selected per-game icon is converted into a multi-resolution Windows ICO and placed at the disc root as hidden/system `game.ico`. `autorun.inf` references this root-level icon for the optical-drive and AutoPlay surfaces.
+The selected per-game icon is converted into a multi-resolution Windows ICO and placed at the disc root as hidden/system `game.ico`. `autorun.inf` references this root-level icon for the optical-drive and AutoPlay surfaces. The AutoPlay application action is declared with `shellexecute=PLAY.exe`, while a dedicated `ps2builderplay` shell verb is marked as the default optical-drive action so double-clicking the mounted/burned disc launches `PLAY.exe` when Windows honors AutoRun metadata.
 
 `PS2Builder.exe` carries a compiled-in multi-resolution PS2 Builder application icon. Since the same published binary is copied into generated discs, `PLAY.exe` carries that stable application icon as well. The Builder does not rewrite executable resources per game.
 

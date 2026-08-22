@@ -12,6 +12,7 @@ internal sealed class ExitOverlayForm : Form
     readonly Button exitButton;
     readonly System.Windows.Forms.Timer controllerTimer;
     readonly GamepadReader gamepadReader;
+    readonly Panel card;
     GamepadSnapshot previousGamepadState;
     int selectedIndex;
 
@@ -31,7 +32,7 @@ internal sealed class ExitOverlayForm : Form
         KeyPreview = true;
         AutoScaleMode = AutoScaleMode.Dpi;
 
-        var card = new Panel
+        card = new Panel
         {
             Size = new Size(560, 250),
             BackColor = CardBackground,
@@ -98,18 +99,39 @@ internal sealed class ExitOverlayForm : Form
         layout.Controls.Add(help, 0, 3);
         layout.SetColumnSpan(help, 2);
 
-        Resize += (_, _) => CenterCard(card);
-        Shown += (_, _) =>
-        {
-            CenterCard(card);
-            SetSelection(0);
-            Activate();
-        };
+        Resize += (_, _) => CenterCard();
 
         gamepadReader = new GamepadReader(pcsx2Directory);
         controllerTimer = new System.Windows.Forms.Timer { Interval = 50 };
         controllerTimer.Tick += (_, _) => PollGamepad();
+
+        PrepareForShow(screenBounds);
+    }
+
+    public void PrepareForShow(Rectangle screenBounds)
+    {
+        Bounds = screenBounds;
+        CenterCard();
+        SetSelection(0);
+
+        // Baseline the current pad state before polling starts. A button still held from
+        // dismissing the previous overlay must not immediately dismiss/reconfirm the next one.
+        previousGamepadState = gamepadReader.Read();
         controllerTimer.Start();
+    }
+
+    public void HideOverlay()
+    {
+        controllerTimer.Stop();
+        Hide();
+    }
+
+    protected override void OnShown(EventArgs e)
+    {
+        base.OnShown(e);
+        PrepareForShow(Bounds);
+        Activate();
+        BringToFront();
     }
 
     Button CreateChoiceButton(string text, int index)
@@ -137,7 +159,7 @@ internal sealed class ExitOverlayForm : Form
         return button;
     }
 
-    void CenterCard(Control card)
+    void CenterCard()
     {
         card.Left = Math.Max(0, (ClientSize.Width - card.Width) / 2);
         card.Top = Math.Max(0, (ClientSize.Height - card.Height) / 2);
@@ -166,6 +188,9 @@ internal sealed class ExitOverlayForm : Form
 
     void PollGamepad()
     {
+        if (!Visible)
+            return;
+
         var state = gamepadReader.Read();
 
         if (state.Left && !previousGamepadState.Left)
