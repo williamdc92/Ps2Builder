@@ -10,12 +10,21 @@ public static class Player
     {
         var data = Path.Combine(discRoot, ".ps2builder");
         var manifestPath = Path.Combine(data, "manifest.json");
-        var m = JsonSerializer.Deserialize<DiscManifest>(File.ReadAllText(manifestPath)) ?? throw new InvalidOperationException("The disc manifest is invalid.");
-        var safeSerial = string.Concat(m.Serial.Select(c => char.IsLetterOrDigit(c) || c == '-' ? c : '_'));
-        var localRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PS2Builder", "Games", safeSerial);
-        var sharedSaves = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Saved Games", "PS2Builder", "MemoryCards");
-        Directory.CreateDirectory(localRoot); Directory.CreateDirectory(sharedSaves);
-        Directory.CreateDirectory(Path.Combine(localRoot, "inis")); Directory.CreateDirectory(Path.Combine(localRoot, "patches"));
+        var m = JsonSerializer.Deserialize<DiscManifest>(File.ReadAllText(manifestPath))
+            ?? throw new InvalidOperationException("The disc manifest is invalid.");
+
+        var safeSerial = SanitizePathComponent(m.Serial, "UNKNOWN");
+        var localRoot = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "PS2Builder", "Games", safeSerial);
+        var sharedSaves = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            "Saved Games", "PS2Builder", "MemoryCards");
+
+        Directory.CreateDirectory(localRoot);
+        Directory.CreateDirectory(sharedSaves);
+        Directory.CreateDirectory(Path.Combine(localRoot, "inis"));
+        Directory.CreateDirectory(Path.Combine(localRoot, "patches"));
 
         // Selected patch files are copied from the read-only disc into PCSX2's writable data path.
         // Files originating from optical media may carry the ReadOnly attribute. Always normalize
@@ -36,13 +45,128 @@ public static class Player
 
         EnsureVisualCppRuntime(data);
 
-        var exe = Path.Combine(data, m.Pcsx2ExeRelativePath);
+        var discRuntime = Path.Combine(data, "runtime");
         var game = Path.Combine(data, m.GameRelativePath);
-        if (!File.Exists(exe)) throw new FileNotFoundException("The PCSX2 runtime is missing from the disc.", exe);
-        if (!File.Exists(game)) throw new FileNotFoundException("The game image is missing from the disc.", game);
+        if (!Directory.Exists(discRuntime))
+            throw new DirectoryNotFoundException("The PCSX2 runtime is missing from the disc.");
+        if (!File.Exists(game))
+            throw new FileNotFoundException("The game image is missing from the disc.", game);
 
-        var args = $"-nogui -batch -fullscreen -slowboot -datapath \"{localRoot}\" -- \"{game}\"";
-        Process.Start(new ProcessStartInfo(exe, args) { WorkingDirectory = Path.GetDirectoryName(exe)!, UseShellExecute = false });
+        // PCSX2 stable v2.6.x does not support the newer -datapath CLI option.
+        // To remain compatible with stable releases while keeping the generated disc read-only,
+        // cache the bundled runtime locally and use PCSX2 portable mode. portable.txt points the
+        // runtime at this game's writable PS2 Builder directory. The game and BIOS remain on disc.
+        var localRuntime = EnsureLocalRuntime(discRuntime, m);
+        var relativeDataPath = Path.GetRelativePath(localRuntime, localRoot);
+        File.WriteAllText(Path.Combine(localRuntime, "portable.txt"), relativeDataPath, Encoding.UTF8);
+
+        var exe = Path.Combine(localRuntime, "pcsx2-qt.exe");
+        if (!File.Exists(exe))
+            throw new FileNotFoundException("The cached PCSX2 runtime is incomplete.", exe);
+
+        var args = $"-portable -nogui -batch -fullscreen -slowboot -- \"{game}\"";
+        Process.Start(new ProcessStartInfo(exe, args)
+        {
+            WorkingDirectory = localRuntime,
+            UseShellExecute = false
+        });
+    }
+
+    static string EnsureLocalRuntime(string discRuntime, DiscManifest manifest)
+    {
+        var safeVersion = SanitizePathComponent(manifest.RuntimeVersion ?? "bundled", "bundled");
+        var runtimeRoot = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "PS2Builder", "Runtime", safeVersion);
+        var marker = Path.Combine(runtimeRoot, ".ps2builder-runtime.json");
+        var exe = Path.Combine(runtimeRoot, "pcsx2-qt.exe");
+
+        var markerMatches = false;
+        if (File.Exists(marker) && File.Exists(exe))
+        {
+            try
+            {
+                var cached = JsonSerializer.Deserialize<RuntimeCacheMarker>(File.ReadAllText(marker));
+                markerMatches = cached != null &&
+                    string.Equals(cached.Version, manifest.RuntimeVersion ?? "bundled", StringComparison.Ordinal) &&
+                    string.Equals(cached.Source, manifest.RuntimeSource, StringComparison.Ordinal);
+            }
+            catch
+            {
+                markerMatches = false;
+            }
+        }
+
+        if (!markerMatches)
+        {
+            if (Directory.Exists(runtimeRoot))
+            {
+                NormalizeDirectoryAttributes(runtimeRoot);
+                Directory.Delete(runtimeRoot, true);
+            }
+
+            Directory.CreateDirectory(runtimeRoot);
+            CopyDirectoryAsWritable(discRuntime, runtimeRoot);
+
+            if (!File.Exists(exe))
+                throw new InvalidOperationException("The bundled PCSX2 runtime does not contain pcsx2-qt.exe.");
+
+            File.WriteAllText(marker, JsonSerializer.Serialize(
+                new RuntimeCacheMarker
+                {
+                    Version = manifest.RuntimeVersion ?? "bundled",
+                    Source = manifest.RuntimeSource
+                },
+                new JsonSerializerOptions { WriteIndented = true }));
+        }
+
+        // A previous run may have left portable.txt read-only. Normalize before updating it.
+        var portable = Path.Combine(runtimeRoot, "portable.txt");
+        if (File.Exists(portable))
+            File.SetAttributes(portable, FileAttributes.Normal);
+
+        return runtimeRoot;
+    }
+
+    static void CopyDirectoryAsWritable(string sourceRoot, string destinationRoot)
+    {
+        foreach (var directory in Directory.EnumerateDirectories(sourceRoot, "*", SearchOption.AllDirectories))
+        {
+            var relative = Path.GetRelativePath(sourceRoot, directory);
+            var destination = Path.Combine(destinationRoot, relative);
+            Directory.CreateDirectory(destination);
+            try { File.SetAttributes(destination, FileAttributes.Directory); } catch { }
+        }
+
+        foreach (var source in Directory.EnumerateFiles(sourceRoot, "*", SearchOption.AllDirectories))
+        {
+            var relative = Path.GetRelativePath(sourceRoot, source);
+            var destination = Path.Combine(destinationRoot, relative);
+            CopyAsWritable(source, destination);
+        }
+    }
+
+    static void NormalizeDirectoryAttributes(string root)
+    {
+        foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+        {
+            try { File.SetAttributes(file, FileAttributes.Normal); } catch { }
+        }
+
+        foreach (var directory in Directory.EnumerateDirectories(root, "*", SearchOption.AllDirectories)
+                     .OrderByDescending(x => x.Length))
+        {
+            try { File.SetAttributes(directory, FileAttributes.Directory); } catch { }
+        }
+
+        try { File.SetAttributes(root, FileAttributes.Directory); } catch { }
+    }
+
+    static string SanitizePathComponent(string value, string fallback)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        var result = new string(value.Select(c => invalid.Contains(c) ? '_' : c).ToArray()).Trim();
+        return string.IsNullOrWhiteSpace(result) ? fallback : result;
     }
 
     static void CopyAsWritable(string source, string destination)
@@ -51,8 +175,6 @@ public static class Player
 
         if (File.Exists(destination))
         {
-            // A previous version of PS2 Builder may have copied the ReadOnly attribute
-            // from the mounted ISO/DVD. Clear it before replacing the file.
             var attributes = File.GetAttributes(destination);
             if ((attributes & FileAttributes.ReadOnly) != 0)
                 File.SetAttributes(destination, attributes & ~FileAttributes.ReadOnly);
@@ -62,7 +184,6 @@ public static class Player
         using (var output = new FileStream(destination, FileMode.Create, FileAccess.Write, FileShare.None))
             input.CopyTo(output);
 
-        // Do not propagate read-only/optical-media attributes to the writable local copy.
         File.SetAttributes(destination, FileAttributes.Normal);
     }
 
@@ -72,38 +193,75 @@ public static class Player
         var vcruntime = Path.Combine(Environment.SystemDirectory, "VCRUNTIME140.dll");
         if (File.Exists(msvcp) && File.Exists(vcruntime)) return;
         var setup = Path.Combine(data, "prerequisites", "vc_redist.x64.exe");
-        if (!File.Exists(setup)) throw new InvalidOperationException("The required Microsoft Visual C++ Runtime is not installed and the offline installer is missing from the disc.");
-        using var p = Process.Start(new ProcessStartInfo(setup, "/install /quiet /norestart") { UseShellExecute = true, Verb = "runas" });
+        if (!File.Exists(setup))
+            throw new InvalidOperationException("The required Microsoft Visual C++ Runtime is not installed and the offline installer is missing from the disc.");
+        using var p = Process.Start(new ProcessStartInfo(setup, "/install /quiet /norestart")
+        {
+            UseShellExecute = true,
+            Verb = "runas"
+        });
         p?.WaitForExit();
-        if (!File.Exists(msvcp) || !File.Exists(vcruntime)) throw new InvalidOperationException("The Microsoft Visual C++ Runtime required by PCSX2 could not be installed.");
+        if (!File.Exists(msvcp) || !File.Exists(vcruntime))
+            throw new InvalidOperationException("The Microsoft Visual C++ Runtime required by PCSX2 could not be installed.");
     }
 
     static string BuildIni(DiscManifest m, string biosDir, string memcards)
     {
-        float upscale = m.Resolution switch {
-            ResolutionProfile.Native => 1, ResolutionProfile.X2 => 2, ResolutionProfile.X3 => 3,
-            ResolutionProfile.X4 => 4, ResolutionProfile.X6 => 6, _ => AutoUpscale()
+        float upscale = m.Resolution switch
+        {
+            ResolutionProfile.Native => 1,
+            ResolutionProfile.X2 => 2,
+            ResolutionProfile.X3 => 3,
+            ResolutionProfile.X4 => 4,
+            ResolutionProfile.X6 => 6,
+            _ => AutoUpscale()
         };
-        var aspect = m.Aspect switch { AspectProfile.Original4x3 => "4:3", AspectProfile.Widescreen16x9 => "16:9", _ => "Auto 4:3/3:2" };
+        var aspect = m.Aspect switch
+        {
+            AspectProfile.Original4x3 => "4:3",
+            AspectProfile.Widescreen16x9 => "16:9",
+            _ => "Auto 4:3/3:2"
+        };
         bool ws = m.EnabledPatchGroups.Any(x => x.Equals("Widescreen 16:9", StringComparison.OrdinalIgnoreCase));
         bool ni = m.EnabledPatchGroups.Any(x => x.Equals("No-Interlacing", StringComparison.OrdinalIgnoreCase));
-        var other = m.EnabledPatchGroups.Where(x => !x.Equals("Widescreen 16:9", StringComparison.OrdinalIgnoreCase) && !x.Equals("No-Interlacing", StringComparison.OrdinalIgnoreCase)).ToList();
+        var other = m.EnabledPatchGroups.Where(x =>
+            !x.Equals("Widescreen 16:9", StringComparison.OrdinalIgnoreCase) &&
+            !x.Equals("No-Interlacing", StringComparison.OrdinalIgnoreCase)).ToList();
+
         var sb = new StringBuilder();
         sb.AppendLine("[UI]").AppendLine("SettingsVersion = 1").AppendLine("StartFullscreen = true");
         sb.AppendLine("[Folders]").AppendLine($"Bios = {biosDir}").AppendLine($"MemoryCards = {memcards}");
         sb.AppendLine("[Filenames]").AppendLine($"BIOS = {m.BiosFileName}");
-        sb.AppendLine("[EmuCore]").AppendLine("EnablePatches = true").AppendLine($"EnableWideScreenPatches = {ws.ToString().ToLowerInvariant()}").AppendLine($"EnableNoInterlacingPatches = {ni.ToString().ToLowerInvariant()}");
-        sb.AppendLine("[EmuCore/GS]").AppendLine("Renderer = -1").AppendLine($"upscale_multiplier = {upscale:0.#}").AppendLine($"AspectRatio = {aspect}").AppendLine("deinterlace_mode = 0");
-        sb.AppendLine("[MemoryCards]").AppendLine("Slot1_Enable = true").AppendLine("Slot1_Filename = Mcd001.ps2").AppendLine("Slot2_Enable = true").AppendLine("Slot2_Filename = Mcd002.ps2");
+        sb.AppendLine("[EmuCore]").AppendLine("EnablePatches = true")
+            .AppendLine($"EnableWideScreenPatches = {ws.ToString().ToLowerInvariant()}")
+            .AppendLine($"EnableNoInterlacingPatches = {ni.ToString().ToLowerInvariant()}");
+        sb.AppendLine("[EmuCore/GS]").AppendLine("Renderer = -1")
+            .AppendLine($"upscale_multiplier = {upscale:0.#}")
+            .AppendLine($"AspectRatio = {aspect}")
+            .AppendLine("deinterlace_mode = 0");
+        sb.AppendLine("[MemoryCards]").AppendLine("Slot1_Enable = true")
+            .AppendLine("Slot1_Filename = Mcd001.ps2")
+            .AppendLine("Slot2_Enable = true")
+            .AppendLine("Slot2_Filename = Mcd002.ps2");
         sb.AppendLine("[InputSources]").AppendLine("SDL = true").AppendLine("XInput = true").AppendLine("Keyboard = true");
-        if (other.Count > 0) { sb.AppendLine("[Patches]"); foreach (var p in other) sb.AppendLine($"Enable = {p}"); }
+        if (other.Count > 0)
+        {
+            sb.AppendLine("[Patches]");
+            foreach (var p in other) sb.AppendLine($"Enable = {p}");
+        }
         return sb.ToString();
     }
 
     static float AutoUpscale()
     {
-        var b = Screen.PrimaryScreen?.Bounds ?? new Rectangle(0,0,1920,1080);
+        var b = Screen.PrimaryScreen?.Bounds ?? new Rectangle(0, 0, 1920, 1080);
         var max = Math.Max(b.Width, b.Height);
         return max >= 3500 ? 6 : max >= 2400 ? 4 : max >= 1800 ? 3 : 2;
+    }
+
+    sealed class RuntimeCacheMarker
+    {
+        public string Version { get; set; } = string.Empty;
+        public string Source { get; set; } = string.Empty;
     }
 }

@@ -13,7 +13,7 @@
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="SharpCompress" Version="0.50.4" />
